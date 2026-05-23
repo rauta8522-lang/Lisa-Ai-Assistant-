@@ -173,7 +173,8 @@ export class LiveSessionManager {
                   } else if (args.actionType === "spotify") {
                     url = `https://open.spotify.com/search/${encodeURIComponent(args.query)}`;
                   } else if (args.actionType === "whatsapp") {
-                    url = `https://web.whatsapp.com/send?phone=${args.target || ''}&text=${encodeURIComponent(args.query)}`;
+                    // Use WhatsApp API URL for mobile compatibility and automatic app/web redirection.
+                    url = `https://api.whatsapp.com/send?phone=${args.target || ''}&text=${encodeURIComponent(args.query)}`;
                   } else {
                     let website = args.query.replace(/\s+/g, "");
                     if (!website.includes(".")) website += ".com";
