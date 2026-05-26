@@ -9,6 +9,8 @@ import { playPCM, resumeAudioContext } from "./utils/audioUtils";
 import { Platform, Features, Network } from "./utils/platformUtils";
 import { motion, AnimatePresence } from "framer-motion";
 import SettingsMenu from "./components/SettingsMenu";
+import { db } from "./config/firebase";
+import { collection, addDoc } from "firebase/firestore";
 
 type AppState = "idle" | "listening" | "processing" | "speaking";
 
@@ -26,6 +28,20 @@ declare global {
 }
 
 export default function App() {
+  useEffect(() => {
+  window.addEventListener("appinstalled", async () => {
+    try {
+      await addDoc(collection(db, "installs"), {
+        installedAt: new Date(),
+        userAgent: navigator.userAgent,
+      });
+
+      console.log("Lisa AI Installed");
+    } catch (error) {
+      console.error("Install tracking failed:", error);
+    }
+  });
+}, []);
   const [appState, setAppState] = useState<AppState>("idle");
   const [deviceType] = useState(Platform.getDeviceType());
   const [isOffline, setIsOffline] = useState(!navigator.onLine);
