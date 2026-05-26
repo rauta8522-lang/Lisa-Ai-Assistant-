@@ -42,7 +42,6 @@ export default function App() {
     }
   });
 }, []);
-  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
   const [appState, setAppState] = useState<AppState>("idle");
   const [deviceType] = useState(Platform.getDeviceType());
   const [isOffline, setIsOffline] = useState(!navigator.onLine);
@@ -88,21 +87,6 @@ useEffect(() => {
   return () => {
     window.removeEventListener("online", handleOnline);
     window.removeEventListener("offline", handleOffline);
-  };
-}, []);
-
-
-// 👇 YAHAN paste karo
-useEffect(() => {
-  const handler = (e: any) => {
-    e.preventDefault();
-    setDeferredPrompt(e);
-  };
-
-  window.addEventListener("beforeinstallprompt", handler);
-
-  return () => {
-    window.removeEventListener("beforeinstallprompt", handler);
   };
 }, []);
 
@@ -386,17 +370,7 @@ useEffect(() => {
 
   return (
     <div className="h-[100dvh] w-screen bg-[#050505] text-white flex flex-col items-center justify-between font-sans relative overflow-hidden m-0 p-0 safe-area">
-     {deferredPrompt && (
-      <button
-        onClick={async () => {
-          deferredPrompt.prompt();
-          await deferredPrompt.userChoice;
-          setDeferredPrompt(null);
-        }}
-      >
-        Install App
-      </button>
-    )}
+     
       {/* Offline indicator */}
       {isOffline && (
         <div className="fixed top-0 left-0 right-0 bg-red-500/80 text-white py-2 text-center text-xs md:text-sm z-50">
