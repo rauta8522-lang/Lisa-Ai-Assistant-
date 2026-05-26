@@ -8,6 +8,7 @@ import PermissionModal from "./components/PermissionModal";
 import { playPCM, resumeAudioContext } from "./utils/audioUtils";
 import { Platform, Features, Network } from "./utils/platformUtils";
 import { motion, AnimatePresence } from "framer-motion";
+import SettingsMenu from "./components/SettingsMenu";
 
 type AppState = "idle" | "listening" | "processing" | "speaking";
 
@@ -478,6 +479,10 @@ export default function App() {
         )}
       </main>
 
+      {/* Settings 3-Dot Menu Button */}
+       <div className="absolute top-6 right-2 z-50 flex items-center">
+         <SettingsMenu userEmail="anil@example.com" />
+       </div>
       {/* Controls */}
       <footer className="absolute bottom-0 left-0 w-full flex flex-col items-center justify-center pb-4 md:pb-8 z-20 shrink-0 gap-3 md:gap-4 px-3 md:px-4">
         <AnimatePresence>

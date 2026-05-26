@@ -24,7 +24,7 @@ export function getStoredContacts(): Contact[] {
     console.error("Failed to parse stored contacts", e);
   }
   // Default contact
-  return [{ id: "1", name: "soni", phone: "919999999999" }];
+  return [{ id: "1", name: "anil", phone: "919898989898" }];
 }
 
 export function saveContacts(contacts: Contact[]): void {
@@ -41,9 +41,22 @@ export default function ContactsManager({ onClose }: ContactsManagerProps) {
   const [newPhone, setNewPhone] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
 
-  useEffect(() => {
-    saveContacts(contacts);
-  }, [contacts]);
+  
+useEffect(() => {
+  const loadContacts = async () => {
+    try {
+      const response = await fetch('http://localhost:5000/api/data');
+      if (response.ok) {
+        const data = await response.json();
+        setContacts(data);
+      }
+    } catch (err) {
+      console.error("Error loading data:", err);
+    }
+  };
+
+  loadContacts();
+}, []);
 
   const addContact = () => {
     if (newName.trim() && newPhone.trim()) {
@@ -65,6 +78,16 @@ export default function ContactsManager({ onClose }: ContactsManagerProps) {
   const handleKeyPress = (e: React.KeyboardEvent) => {
     if (e.key === "Enter") {
       addContact();
+
+      // Backend par data bhejne ke liye ye code add karein:
+    fetch('http://localhost:5000/api/save', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: newName, phone: newPhone })
+    })
+    .then(res => res.json())
+    .then(data => console.log("Backend response:", data))
+    .catch(err => console.error("Error:", err));
     }
   };
 

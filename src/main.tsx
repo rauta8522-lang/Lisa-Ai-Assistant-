@@ -3,6 +3,8 @@ import { createRoot } from "react-dom/client";
 import App from "./App.tsx";
 import "./index.css";
 import { registerSW } from 'virtual:pwa-register';
+import { initAnalytics } from "./lib/analytics";
+//initAnalytics();
 
 // Register service worker for PWA support
 const updateSW = registerSW({
