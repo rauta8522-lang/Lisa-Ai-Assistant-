@@ -1,0 +1,7 @@
+{
+  "name": "Remix: Lisa - AI Voice Assistant",
+  "description": "A sassy, witty, and intelligent Indian female AI voice assistant named Lisa.",
+  "requestFramePermissions": [
+    "microphone"
+  ]
+}

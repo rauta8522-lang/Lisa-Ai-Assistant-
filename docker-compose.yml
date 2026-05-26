@@ -1,0 +1,35 @@
+version: '3.8'
+
+services:
+  lisa-app:
+    build: .
+    ports:
+      - "3000:3000"
+    environment:
+      - VITE_GEMINI_API_KEY=${VITE_GEMINI_API_KEY}
+    networks:
+      - lisa-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  # Optional: Reverse proxy for SSL and domain routing
+  # nginx:
+  #   image: nginx:alpine
+  #   ports:
+  #     - "80:80"
+  #     - "443:443"
+  #   volumes:
+  #     - ./nginx.conf:/etc/nginx/nginx.conf:ro
+  #   depends_on:
+  #     - lisa-app
+  #   networks:
+  #     - lisa-network
+
+networks:
+  lisa-network:
+    driver: bridge
