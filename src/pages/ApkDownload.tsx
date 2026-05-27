@@ -42,7 +42,7 @@ export default function ApkDownload() {
         <motion.a
           whileHover={{ scale: 1.02 }}
           whileTap={{ scale: 0.98 }}
-          href="https://github.com/rauta8522-lang/Lisa-Ai-Assistant-/releases/download/v1.0.0/Lisa.apk"
+          href="https://github.com/rauta8522-lang/Lisa-Ai-Assistant-/releases/download/v1.0.1/app-release.apk"
           target="_blank"
           rel="noopener noreferrer"
           className="block w-full bg-orange-600 hover:bg-orange-700 transition-all text-white font-bold py-4 rounded-xl text-center text-lg shadow-lg mb-8"

@@ -12,6 +12,9 @@
     "start:bot": "node server/twilio-bot.js"
   },
   "dependencies": {
+    "@capacitor/android": "^8.3.4",
+    "@capacitor/cli": "^8.3.4",
+    "@capacitor/core": "^8.3.4",
     "@google/genai": "^1.47.0",
     "@google/generative-ai": "^0.21.0",
     "@tailwindcss/vite": "^4.1.14",
