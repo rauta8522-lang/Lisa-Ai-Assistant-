@@ -13,6 +13,7 @@ import { db } from "./config/firebase";
 import { collection, addDoc } from "firebase/firestore";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import ApkDownload from "./pages/ApkDownload";
+import LoginPage from "./pages/LoginPage";
 
 type AppState = "idle" | "listening" | "processing" | "speaking";
 
@@ -30,6 +31,7 @@ declare global {
 }
 
 export default function App() {
+  const [loggedIn, setLoggedIn] = useState(false);
   useEffect(() => {
   window.addEventListener("appinstalled", async () => {
     try {
@@ -368,6 +370,13 @@ useEffect(() => {
     setTextInput("");
     setShowTextInput(false);
   };
+  if (!loggedIn) {
+  return (
+    <LoginPage
+      onLoginSuccess={() => setLoggedIn(true)}
+    />
+  );
+}
    return (
     <BrowserRouter>
       <Routes>
@@ -465,8 +474,8 @@ useEffect(() => {
             </main>
 
             {/* Settings 3-Dot Menu Button */}
-            <div className="absolute top-6 right-2 z-50 flex items-center">
-              <SettingsMenu userEmail="anil@example.com" />
+             <div className="absolute top-6 right-2 z-50 flex items-center">
+             <SettingsMenu userEmail="anil@gmail.com" />*
             </div>
 
             {/* Controls */}
