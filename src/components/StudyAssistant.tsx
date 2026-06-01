@@ -10,7 +10,7 @@ export default function StudyAssistant({ notes }: Props) {
   if (!notes) return null;
 
   return (
-    <div className="absolute top-20 right-4 w-[420px] h-[80vh] bg-white text-black rounded-xl shadow-2xl p-4 z-50 flex flex-col overflow-hidden">
+    <div className="absolute top-20 right-4 w-[520px] h-[60vh] bg-white text-black rounded-xl shadow-2xl p-4 z-50 flex flex-col overflow-hidden">
 
       {/* Header */}
       <div className="flex justify-between items-center mb-3">

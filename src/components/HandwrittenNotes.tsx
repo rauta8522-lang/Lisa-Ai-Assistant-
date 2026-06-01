@@ -30,9 +30,42 @@ export default function HandwrittenNotes({ notes }: Props) {
       </h1>
     
 
-      <ReactMarkdown>
-         {notes}
-      </ReactMarkdown>
+      <ReactMarkdown
+  components={{
+    h1: ({ children }) => (
+      <h1 className="text-4xl font-bold mb-6 mt-4">
+        {children}
+      </h1>
+    ),
+    h2: ({ children }) => (
+      <h2 className="text-3xl font-bold mb-4 mt-8 underline">
+        {children}
+      </h2>
+    ),
+    h3: ({ children }) => (
+      <h3 className="text-2xl font-semibold mb-3 mt-5">
+        {children}
+      </h3>
+    ),
+    p: ({ children }) => (
+      <p className="mb-4">
+        {children}
+      </p>
+    ),
+    ul: ({ children }) => (
+      <ul className="list-disc ml-8 mb-4">
+        {children}
+      </ul>
+    ),
+    strong: ({ children }) => (
+      <strong className="font-bold text-black">
+        {children}
+      </strong>
+    ),
+  }}
+     >
+     {notes}
+    </ReactMarkdown>
     </div>
   );
 }

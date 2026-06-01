@@ -440,10 +440,13 @@ useEffect(() => {
               )}
 
               {/* Center Visualizer */}
-              <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-0">
-                <Visualizer state={appState} />
-                <StudyAssistant notes={generatedNotes} />
-              </div>
+             <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-0">
+             <Visualizer state={appState} />
+
+             <div className="pointer-events-auto">
+             <StudyAssistant notes={generatedNotes} />
+            </div>
+          </div>
 
               {/* Right Column: User Status */}
               {deviceType !== 'mobile' && (
