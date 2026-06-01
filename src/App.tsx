@@ -8,6 +8,8 @@ import PermissionModal from "./components/PermissionModal";
 import { playPCM, resumeAudioContext } from "./utils/audioUtils";
 import { Platform, Features, Network } from "./utils/platformUtils";
 import { motion, AnimatePresence } from "framer-motion";
+import StudyAssistant from "./components/StudyAssistant";
+import { generateNotes } from "./services/notesService";
 import SettingsMenu from "./components/SettingsMenu";
 import { db } from "./config/firebase";
 import { collection, addDoc } from "firebase/firestore";
@@ -47,7 +49,7 @@ export default function App() {
   const [appState, setAppState] = useState<AppState>("idle");
   const [deviceType] = useState(Platform.getDeviceType());
   const [isOffline, setIsOffline] = useState(!navigator.onLine);
-  
+  const [generatedNotes, setGeneratedNotes] = useState("");
   const [messages, setMessages] = useState<ChatMessage[]>(() => {
     const saved = localStorage.getItem("lisa_chat_history");
     if (saved) {
@@ -67,18 +69,6 @@ export default function App() {
   }, [messages]);
 
   // Handle online/offline status
-  useEffect(() => {
-    const handleOnline = () => setIsOffline(false);
-    const handleOffline = () => setIsOffline(true);
-
-    window.addEventListener("online", handleOnline);
-    window.addEventListener("offline", handleOffline);
-
-    return () => {
-      window.removeEventListener("online", handleOnline);
-      window.removeEventListener("offline", handleOffline);
-    };
-  }, []);
 useEffect(() => {
   const handleOnline = () => setIsOffline(false);
   const handleOffline = () => setIsOffline(true);
@@ -158,6 +148,30 @@ useEffect(() => {
 
     const lowerTranscript = finalTranscript.toLowerCase();
     setMessages((prev) => [...prev, { id: Date.now().toString(), sender: "user", text: finalTranscript }]);
+
+    if (
+  lowerTranscript.includes("notes") ||
+  lowerTranscript.includes("handwritten notes") ||
+  lowerTranscript.includes("study notes")
+) {
+  setAppState("processing");
+
+  const notes = await generateNotes(finalTranscript);
+
+  setGeneratedNotes(notes);
+
+  setMessages((prev) => [
+    ...prev,
+    {
+      id: Date.now().toString() + "-l",
+      sender: "lisa",
+      text: "Notes generated successfully.",
+    },
+  ]);
+
+  setAppState("idle");
+  return;
+}
     
     if (songWindowRef.current && /\b(?:stop|pause|halt|band|rok|ruk|band kar|rok do|pause kar|pause karo)\b/.test(lowerTranscript)) {
       stopSong();
@@ -428,6 +442,7 @@ useEffect(() => {
               {/* Center Visualizer */}
               <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-0">
                 <Visualizer state={appState} />
+                <StudyAssistant notes={generatedNotes} />
               </div>
 
               {/* Right Column: User Status */}
@@ -466,7 +481,7 @@ useEffect(() => {
 
             {/* Settings 3-Dot Menu Button */}
              <div className="absolute top-6 right-2 z-50 flex items-center">
-             <SettingsMenu userEmail="anil@gmail.com" />*
+             <SettingsMenu userEmail="@gmail.com" />
             </div>
 
             {/* Controls */}

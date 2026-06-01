@@ -53,7 +53,7 @@ export async function getLisaResponse(prompt: string, history: { sender: "user" 
 
       // Initialize Model with System Instructions
       const model = genAI.getGenerativeModel({ 
-        model: "gemini-1.5-flash", // Using stable Flash for lower latency and fewer 503s
+        model: "gemini-2.5-flash", // Using stable Flash for lower latency and fewer 503s
         systemInstruction: systemInstruction 
       });
 
@@ -68,10 +68,9 @@ export async function getLisaResponse(prompt: string, history: { sender: "user" 
     
     return text || "Ugh, fine. I have nothing to say.";
   } catch (error: any) {
-    console.error("Gemini Error:", error);
-    // Common fix for 503: Just a playful error message
-    return "Uff, server down hai ya Google nakhre dikha raha hai. Thodi der baad try kar, Anil.";
-  }
+  console.error("Gemini Error:", error);
+  return "";
+}
 }
 
 /**
@@ -81,7 +80,7 @@ export async function getLisaResponse(prompt: string, history: { sender: "user" 
  */
 export async function getLisaAudio(text: string): Promise<string | null> {
   try {
-    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
     
     const result = await model.generateContent({
       contents: [{ role: "user", parts: [{ text }] }],
