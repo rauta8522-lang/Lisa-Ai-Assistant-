@@ -77,7 +77,7 @@ body {
 /* Mobile Responsive */
 @media (max-width: 1024px) {
   html, body, #root {
-    overflow-x: hidden;
+    overflow-x: auto;
   }
 }
 
