@@ -4,10 +4,13 @@ import { downloadPDF } from "./PDFGenerator";
 
 interface Props {
   notes: string;
+  diagramPrompt: string;
 }
 
-export default function StudyAssistant({ notes }: Props) {
+export default function StudyAssistant({ notes, diagramPrompt }: Props) {
   if (!notes) return null;
+
+  const diagramUrl =diagramPrompt? `https://image.pollinations.ai/prompt/${encodeURIComponent( diagramPrompt )}`: "";
 
   return (
     <div className="absolute top-20 right-4 w-[520px] h-[60vh] bg-white text-black rounded-xl shadow-2xl p-4 z-50 flex flex-col overflow-hidden">
@@ -33,6 +36,9 @@ export default function StudyAssistant({ notes }: Props) {
      }}
      >
      <HandwrittenNotes notes={notes} />
+     {diagramUrl && (
+     <img src={diagramUrl} alt="Diagram"
+      className="w-full mt-4 rounded-xl shadow-lg"/>)}
      </div>
 
     </div>

@@ -32,6 +32,7 @@ declare global {
 }
 
 export default function App() {
+  const [diagramPrompt, setDiagramPrompt] = useState("");
   useEffect(() => {
   window.addEventListener("appinstalled", async () => {
     try {
@@ -156,9 +157,10 @@ useEffect(() => {
 ) {
   setAppState("processing");
 
-  const notes = await generateNotes(finalTranscript);
+  const data = await generateNotes(finalTranscript);
 
-  setGeneratedNotes(notes);
+  setGeneratedNotes(data.notes);
+  setDiagramPrompt(data.diagramPrompt);
 
   setMessages((prev) => [
     ...prev,
@@ -168,8 +170,8 @@ useEffect(() => {
       text: "Notes generated successfully.",
     },
   ]);
-
-  setAppState("idle");
+  
+     setAppState("idle");
   return;
 }
     
@@ -444,7 +446,7 @@ useEffect(() => {
              <Visualizer state={appState} />
 
              <div className="pointer-events-auto">
-             <StudyAssistant notes={generatedNotes} />
+             <StudyAssistant notes={generatedNotes} diagramPrompt={diagramPrompt} />
             </div>
           </div>
 
