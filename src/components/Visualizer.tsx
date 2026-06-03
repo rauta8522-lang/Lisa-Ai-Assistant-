@@ -1,12 +1,41 @@
 import { motion } from "framer-motion";
 
 type VisualizerState = "idle" | "listening" | "processing" | "speaking";
+export type AccentTheme = "sky" | "violet" | "pink";
 
 interface VisualizerProps {
   state: VisualizerState;
+  accent: AccentTheme;
 }
 
-export default function Visualizer({ state }: VisualizerProps) {
+const accentThemeMap: Record<AccentTheme, { idle: string; listening: string; processing: string; speaking: string; glow: string; border: string; }> = {
+  sky: {
+    idle: "rgba(56, 189, 248, 1)",
+    listening: "rgba(129, 140, 248, 1)",
+    processing: "rgba(236, 72, 153, 1)",
+    speaking: "rgba(236, 72, 153, 1)",
+    glow: "shadow-sky-500/70",
+    border: "border-sky-400",
+  },
+  violet: {
+    idle: "rgba(168, 85, 247, 1)",
+    listening: "rgba(139, 92, 246, 1)",
+    processing: "rgba(236, 72, 153, 1)",
+    speaking: "rgba(236, 72, 153, 1)",
+    glow: "shadow-violet-500/70",
+    border: "border-violet-400",
+  },
+  pink: {
+    idle: "rgba(236, 72, 153, 1)",
+    listening: "rgba(192, 38, 211, 1)",
+    processing: "rgba(249, 115, 22, 1)",
+    speaking: "rgba(249, 115, 22, 1)",
+    glow: "shadow-pink-500/70",
+    border: "border-pink-400",
+  },
+};
+
+export default function Visualizer({ state, accent }: VisualizerProps) {
   const getRingAnimation = (index: number, reverse: boolean = false) => {
     const baseSpeed = state === "listening" ? 3 : state === "processing" ? 1.5 : state === "speaking" ? 2 : 15;
     return {
@@ -44,13 +73,13 @@ export default function Visualizer({ state }: VisualizerProps) {
     };
   };
 
-  // JARVIS color palette (Cyan/Blue) with Lisa's personality (Violet/Pink hints)
   const getTheme = () => {
+    const theme = accentThemeMap[accent];
     switch (state) {
-      case "listening": return { color: "rgba(139, 92, 246, 1)", glow: "shadow-violet-500/60", border: "border-violet-400" };
-      case "processing": return { color: "rgba(56, 189, 248, 1)", glow: "shadow-sky-400/80", border: "border-sky-400" };
-      case "speaking": return { color: "rgba(236, 72, 153, 1)", glow: "shadow-pink-500/80", border: "border-pink-400" };
-      default: return { color: "rgba(6, 182, 212, 0.8)", glow: "shadow-cyan-500/40", border: "border-cyan-500/50" }; // Cyan for idle
+      case "listening": return { color: theme.listening, glow: theme.glow, border: theme.border };
+      case "processing": return { color: theme.processing, glow: theme.glow, border: theme.border };
+      case "speaking": return { color: theme.speaking, glow: theme.glow, border: theme.border };
+      default: return { color: theme.idle, glow: theme.glow, border: theme.border };
     }
   };
 

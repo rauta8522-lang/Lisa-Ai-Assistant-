@@ -1,6 +1,6 @@
 @import url('https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&family=Share+Tech+Mono&display=swap');
-@import "tailwindcss";
 @import url('https://fonts.googleapis.com/css2?family=Caveat:wght@400;500;600;700&display=swap');
+@import "tailwindcss";
 
 :root {
   --font-sans: "Rajdhani", ui-sans-serif, system-ui, sans-serif;
@@ -16,14 +16,11 @@
 }
 
 html, body, #root {
-  height: 100%;
+  min-height: 100%;
   width: 100%;
   margin: 0;
   padding: 0;
   overflow: hidden;
-  background: radial-gradient(circle at top left, rgba(139, 92, 246, 0.18), transparent 24%),
-              radial-gradient(circle at bottom right, rgba(236, 72, 153, 0.15), transparent 22%),
-              #02080b;
   color: #ffffff;
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
@@ -33,8 +30,72 @@ html, body, #root {
 }
 
 body {
-  background-image: radial-gradient(circle at 20% 10%, rgba(139, 92, 246, 0.16), transparent 25%),
-                    radial-gradient(circle at 80% 90%, rgba(236, 72, 153, 0.14), transparent 20%);
+  position: relative;
+  background: radial-gradient(circle at center, rgba(8, 12, 26, 0.92), rgba(0, 0, 0, 0.98) 70%);
+}
+
+.dashboard-glow-bg {
+  position: relative;
+  background: radial-gradient(circle at center, rgba(12, 18, 42, 0.95), rgba(0, 0, 0, 0.99) 68%);
+  overflow: hidden;
+}
+
+.dashboard-glow-bg::before,
+.dashboard-glow-bg::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  opacity: 0.48;
+  filter: blur(180px);
+}
+
+.dashboard-glow-bg::before {
+  background: radial-gradient(circle at 25% 28%, rgba(59, 130, 246, 0.25), transparent 28%);
+}
+
+.dashboard-glow-bg::after {
+  background: radial-gradient(circle at 75% 30%, rgba(236, 72, 153, 0.22), transparent 26%),
+              radial-gradient(circle at 50% 70%, rgba(168, 85, 247, 0.18), transparent 20%);
+}
+
+.accent-sky.dashboard-glow-bg::before {
+  background: radial-gradient(circle at 25% 28%, rgba(56, 189, 248, 0.31), transparent 28%);
+}
+
+.accent-sky.dashboard-glow-bg::after {
+  background: radial-gradient(circle at 75% 30%, rgba(56, 189, 248, 0.18), transparent 26%),
+              radial-gradient(circle at 50% 70%, rgba(56, 189, 248, 0.14), transparent 20%);
+}
+
+.accent-violet.dashboard-glow-bg::before {
+  background: radial-gradient(circle at 25% 28%, rgba(168, 85, 247, 0.28), transparent 28%);
+}
+
+.accent-violet.dashboard-glow-bg::after {
+  background: radial-gradient(circle at 75% 30%, rgba(168, 85, 247, 0.19), transparent 26%),
+              radial-gradient(circle at 50% 70%, rgba(168, 85, 247, 0.12), transparent 20%);
+}
+
+.accent-pink.dashboard-glow-bg::before {
+  background: radial-gradient(circle at 25% 28%, rgba(236, 72, 153, 0.30), transparent 28%);
+}
+
+.accent-pink.dashboard-glow-bg::after {
+  background: radial-gradient(circle at 75% 30%, rgba(236, 72, 153, 0.18), transparent 26%),
+              radial-gradient(circle at 50% 70%, rgba(236, 72, 153, 0.12), transparent 20%);
+}
+
+@keyframes drift {
+  0% { transform: translate(0, 0); }
+  50% { transform: translate(-30px, 16px); }
+  100% { transform: translate(0, 0); }
+}
+
+@keyframes floatStars {
+  0% { transform: translate(0, 0); }
+  100% { transform: translate(26px, -18px); }
 }
 
 /* Prevent zooming on input focus on iOS */
@@ -120,6 +181,45 @@ html {
   }
 }
 
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-12px); }
+}
+
+@keyframes softPulse {
+  0%, 100% { opacity: 0.85; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.02); }
+}
+
+@keyframes ringPulse {
+  0%, 100% { transform: scale(0.92); opacity: 0.26; }
+  35% { transform: scale(1.04); opacity: 0.45; }
+  70% { transform: scale(0.98); opacity: 0.32; }
+}
+
+@keyframes ringRotate {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.animate-float {
+  animation: float 8s ease-in-out infinite;
+}
+
+.animate-soft-pulse {
+  animation: softPulse 5s ease-in-out infinite;
+}
+
+.animate-ring-pulse {
+  animation: ringPulse 12s ease-in-out infinite;
+  will-change: transform, opacity;
+}
+
+.animate-ring-rotate {
+  animation: ringRotate 45s linear infinite;
+  will-change: transform;
+}
+
 /* Dark mode support */
 @media (prefers-color-scheme: dark) {
   html, body {
@@ -174,4 +274,66 @@ html {
 
 .custom-scroll::-webkit-scrollbar-thumb:hover {
   background: #64748b;
+}
+
+/* Full-screen visualizer state transitions */
+.state-transition {
+  transition: background-color 1s ease-in-out, box-shadow 1s ease-in-out;
+}
+
+/* Orb glow animations for different states */
+@keyframes orbGlowIdle {
+  0%, 100% { box-shadow: 0 0 60px rgba(56, 189, 248, 0.4), 0 0 120px rgba(56, 189, 248, 0.2); }
+  50% { box-shadow: 0 0 80px rgba(56, 189, 248, 0.6), 0 0 160px rgba(56, 189, 248, 0.3); }
+}
+
+@keyframes orbGlowListening {
+  0%, 100% { box-shadow: 0 0 60px rgba(139, 92, 246, 0.4), 0 0 120px rgba(139, 92, 246, 0.2); }
+  50% { box-shadow: 0 0 80px rgba(139, 92, 246, 0.6), 0 0 160px rgba(139, 92, 246, 0.3); }
+}
+
+@keyframes orbGlowReplying {
+  0%, 100% { box-shadow: 0 0 60px rgba(236, 72, 153, 0.4), 0 0 120px rgba(236, 72, 153, 0.2); }
+  50% { box-shadow: 0 0 80px rgba(236, 72, 153, 0.6), 0 0 160px rgba(236, 72, 153, 0.3); }
+}
+
+.orb-idle { animation: orbGlowIdle 3s ease-in-out infinite; }
+.orb-listening { animation: orbGlowListening 1.5s ease-in-out infinite; }
+.orb-replying { animation: orbGlowReplying 1s ease-in-out infinite; }
+
+/* Wave animations for background */
+@keyframes wavePulse {
+  0%, 100% { transform: scale(1); opacity: 0.3; }
+  50% { transform: scale(1.1); opacity: 0.5; }
+}
+
+.animate-wave-pulse {
+  animation: wavePulse 4s ease-in-out infinite;
+}
+
+/* Breathing effect for idle state */
+@keyframes breathe {
+  0%, 100% { opacity: 0.6; transform: scale(1); }
+  50% { opacity: 0.8; transform: scale(1.02); }
+}
+
+.animate-breathe {
+  animation: breathe 5s ease-in-out infinite;
+}
+
+/* Notes inline code styling */
+#notes-container code:not(pre code) {
+  background-color: #fef3c7;
+  color: #92400e;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-family: 'Courier New', monospace;
+  font-size: 28px;
+  font-weight: 600;
+}
+
+/* Notes text selection styling */
+#notes-container ::selection {
+  background-color: rgba(59, 130, 246, 0.3);
+  color: #1e3a5f;
 }

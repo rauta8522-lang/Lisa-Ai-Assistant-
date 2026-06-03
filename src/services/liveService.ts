@@ -10,8 +10,11 @@ export class LiveSessionManager {
   private sessionPromise: Promise<any> | null = null;
   private audioContext: AudioContext | null = null;
   private mediaStream: MediaStream | null = null;
-  private processor: ScriptProcessorNode | null = null;
+  private processorNode: AudioWorkletNode | null = null;
   private source: MediaStreamAudioSourceNode | null = null;
+  private sessionState: 'idle' | 'connecting' | 'open' | 'closed' = 'idle';
+  private pendingAudio: string[] = [];
+  private pendingText: string[] = [];
   
   // Audio playback state
   private playbackContext: AudioContext | null = null;
@@ -56,42 +59,90 @@ export class LiveSessionManager {
       }
 
       this.source = this.audioContext.createMediaStreamSource(this.mediaStream);
-      this.processor = this.audioContext.createScriptProcessor(4096, 1, 1);
 
-      this.processor.onaudioprocess = (e) => {
+      // Use AudioWorklet instead of deprecated ScriptProcessorNode
+      const workletCode = `
+        class RecorderProcessor extends AudioWorkletProcessor {
+          process(inputs) {
+            try {
+              const input = inputs[0];
+              if (input && input[0]) {
+                const floats = input[0];
+                const pcm16 = new Int16Array(floats.length);
+                for (let i = 0; i < floats.length; i++) {
+                  let s = Math.max(-1, Math.min(1, floats[i]));
+                  pcm16[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
+                }
+                // Transfer the ArrayBuffer to main thread
+                this.port.postMessage(pcm16.buffer, [pcm16.buffer]);
+              }
+            } catch (e) {
+              // swallow to avoid crashing the audio thread
+            }
+            return true;
+          }
+        }
+        registerProcessor('recorder-processor', RecorderProcessor);
+      `;
+
+      const blob = new Blob([workletCode], { type: 'application/javascript' });
+      const moduleUrl = URL.createObjectURL(blob);
+      await this.audioContext.audioWorklet.addModule(moduleUrl);
+
+      this.processorNode = new AudioWorkletNode(this.audioContext, 'recorder-processor', { numberOfInputs: 1, numberOfOutputs: 1, channelCount: 1 });
+
+      this.processorNode.port.onmessage = (e) => {
         if (!this.sessionPromise) return;
-        const inputData = e.inputBuffer.getChannelData(0);
-        const pcm16 = new Int16Array(inputData.length);
-        for (let i = 0; i < inputData.length; i++) {
-          let s = Math.max(-1, Math.min(1, inputData[i]));
-          pcm16[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
-        }
-        
-        // Convert to base64
-        const buffer = new ArrayBuffer(pcm16.length * 2);
-        const view = new DataView(buffer);
-        for (let i = 0; i < pcm16.length; i++) {
-          view.setInt16(i * 2, pcm16[i], true);
-        }
-        
-        let binary = '';
-        const bytes = new Uint8Array(buffer);
-        for (let i = 0; i < bytes.byteLength; i++) {
-          binary += String.fromCharCode(bytes[i]);
-        }
-        const base64Data = btoa(binary);
+        try {
+          // Reconstruct Int16Array (received as transferred ArrayBuffer)
+          const buffer = e.data as ArrayBuffer;
+          const bytes = new Uint8Array(buffer);
+          let binary = '';
+          for (let i = 0; i < bytes.byteLength; i++) {
+            binary += String.fromCharCode(bytes[i]);
+          }
+          const base64Data = btoa(binary);
 
-        this.sessionPromise.then(session => {
-          session.sendRealtimeInput({
-            audio: { data: base64Data, mimeType: 'audio/pcm;rate=16000' }
-          });
-        }).catch(err => console.error("Error sending audio", err));
+          // If session not open yet, queue audio to be flushed on open
+          if (this.sessionState !== 'open') {
+            this.pendingAudio.push(base64Data);
+            return;
+          }
+
+          // Send audio safely — guard against closed/closing websocket errors
+          this.sessionPromise.then(session => {
+            try {
+              if (!session || typeof (session as any).sendRealtimeInput !== 'function') {
+                console.warn('Live session not ready for realtime input');
+                return;
+              }
+              // Check possible websocket-like props before sending
+              const conn = (session as any).conn || (session as any).ws || (session as any).socket;
+              const ready = conn && (conn.readyState === WebSocket.OPEN || conn.ws?.readyState === WebSocket.OPEN || conn.socket?.readyState === WebSocket.OPEN);
+              if (conn && !ready) {
+                // Re-queue if underlying socket isn't open
+                this.pendingAudio.push(base64Data);
+                return;
+              }
+              (session as any).sendRealtimeInput({
+                audio: { data: base64Data, mimeType: 'audio/pcm;rate=16000' }
+              });
+            } catch (err) {
+              console.error('Error sending audio (possible closed websocket):', err);
+              try { this.stop(); } catch (e) { console.error('Error stopping after audio send failure:', e); }
+            }
+          }).catch(err => { console.error('Error resolving sessionPromise for audio:', err); this.stop(); });
+        } catch (err) {
+          console.error('Error processing audio buffer from worklet:', err);
+          try { this.stop(); } catch (e) { console.error('Error stopping after processing failure:', e); }
+        }
       };
 
-      this.source.connect(this.processor);
-      this.processor.connect(this.audioContext.destination);
+      this.source.connect(this.processorNode);
+      this.processorNode.connect(this.audioContext.destination);
 
       // Connect to Live API
+      this.sessionState = 'connecting';
       this.sessionPromise = this.ai.live.connect({
         model: "gemini-3.1-flash-live-preview",
         config: {
@@ -130,8 +181,42 @@ export class LiveSessionManager {
           }]
         },
         callbacks: {
-          onopen: () => {
-            console.log("Live API Connected");
+          onopen: (...args: any[]) => {
+            console.log("Live API Connected", ...args);
+            this.sessionState = 'open';
+            // Flush any queued inputs
+            if (this.pendingAudio.length > 0) {
+              const toSend = this.pendingAudio.splice(0);
+              this.sessionPromise?.then(session => {
+                for (const a of toSend) {
+                  try {
+                    const conn = (session as any).conn || (session as any).ws || (session as any).socket;
+                    const ready = conn && (conn.readyState === WebSocket.OPEN || conn.ws?.readyState === WebSocket.OPEN || conn.socket?.readyState === WebSocket.OPEN);
+                    if (conn && !ready) {
+                      this.pendingAudio.push(a);
+                      continue;
+                    }
+                    (session as any).sendRealtimeInput({ audio: { data: a, mimeType: 'audio/pcm;rate=16000' } });
+                  } catch (e) { console.error('Error flushing queued audio:', e); }
+                }
+              }).catch(err => console.error('Error flushing queued audio, session not available:', err));
+            }
+            if (this.pendingText.length > 0) {
+              const toSendText = this.pendingText.splice(0);
+              this.sessionPromise?.then(session => {
+                for (const t of toSendText) {
+                  try {
+                    const conn = (session as any).conn || (session as any).ws || (session as any).socket;
+                    const ready = conn && (conn.readyState === WebSocket.OPEN || conn.ws?.readyState === WebSocket.OPEN || conn.socket?.readyState === WebSocket.OPEN);
+                    if (conn && !ready) {
+                      this.pendingText.push(t);
+                      continue;
+                    }
+                    (session as any).sendRealtimeInput({ text: t });
+                  } catch (e) { console.error('Error flushing queued text:', e); }
+                }
+              }).catch(err => console.error('Error flushing queued text, session not available:', err));
+            }
             this.onStateChange("listening");
           },
           onmessage: async (message: LiveServerMessage) => {
@@ -185,13 +270,21 @@ export class LiveSessionManager {
                   
                   // Send tool response
                   this.sessionPromise?.then(session => {
-                     session.sendToolResponse({
-                       functionResponses: [{
-                         name: call.name,
-                         id: call.id,
-                         response: { result: "Action executed successfully in the browser." }
-                       }]
-                     });
+                     try {
+                       const conn = (session as any).conn || (session as any).ws || (session as any).socket;
+                       const ready = conn && (conn.readyState === WebSocket.OPEN || conn.ws?.readyState === WebSocket.OPEN || conn.socket?.readyState === WebSocket.OPEN);
+                       if (conn && !ready) {
+                         console.warn('Skipping tool response send; connection not open');
+                         return;
+                       }
+                       session.sendToolResponse({
+                         functionResponses: [{
+                           name: call.name,
+                           id: call.id,
+                           response: { result: "Action executed successfully in the browser." }
+                         }]
+                       });
+                     } catch (e) { console.error('Error sending tool response:', e); }
                   });
                 } else if (call.name === "stopPlayback") {
                   this.stopPlayback();
@@ -199,27 +292,48 @@ export class LiveSessionManager {
                   
                   // Send tool response
                   this.sessionPromise?.then(session => {
-                     session.sendToolResponse({
-                       functionResponses: [{
-                         name: call.name,
-                         id: call.id,
-                         response: { result: "Playback stopped successfully." }
-                       }]
-                     });
+                     try {
+                       const conn = (session as any).conn || (session as any).ws || (session as any).socket;
+                       const ready = conn && (conn.readyState === WebSocket.OPEN || conn.ws?.readyState === WebSocket.OPEN || conn.socket?.readyState === WebSocket.OPEN);
+                       if (conn && !ready) {
+                         console.warn('Skipping tool response send; connection not open');
+                         return;
+                       }
+                       session.sendToolResponse({
+                         functionResponses: [{
+                           name: call.name,
+                           id: call.id,
+                           response: { result: "Playback stopped successfully." }
+                         }]
+                       });
+                     } catch (e) { console.error('Error sending tool response:', e); }
                   });
                 }
               }
             }
           },
-          onclose: () => {
-            console.log("Live API Closed");
+          onclose: (...args: any[]) => {
+            console.log("Live API Closed", ...args);
+            this.sessionState = 'closed';
             this.stop();
           },
-          onerror: (err) => {
-            console.error("Live API Error:", err);
+          onerror: (...args: any[]) => {
+            console.error("Live API Error:", ...args);
+            this.sessionState = 'closed';
             this.stop();
           }
         }
+      });
+
+      // Debug: log when the session promise resolves or rejects
+      this.sessionPromise.then(session => {
+        try {
+          console.log('Live session resolved:', Object.keys(session || {}));
+        } catch (e) {
+          console.log('Live session resolved (non-enumerable):', session);
+        }
+      }).catch(err => {
+        console.error('Live session failed to connect:', err);
       });
 
     } catch (error) {
@@ -280,9 +394,9 @@ export class LiveSessionManager {
   }
 
   stop() {
-    if (this.processor) {
-      this.processor.disconnect();
-      this.processor = null;
+    if (this.processorNode) {
+      try { this.processorNode.disconnect(); } catch (e) { /* ignore */ }
+      this.processorNode = null;
     }
     if (this.source) {
       this.source.disconnect();
@@ -307,10 +421,30 @@ export class LiveSessionManager {
   }
 
   sendText(text: string) {
+    // If session hasn't reached open, queue the text
+    if (this.sessionState !== 'open') {
+      this.pendingText.push(text);
+      return;
+    }
+
     if (this.sessionPromise) {
       this.sessionPromise.then(session => {
-        session.sendRealtimeInput({ text });
-      });
+        try {
+          if (!session || typeof (session as any).sendRealtimeInput !== 'function') {
+            console.warn('Live session not available for sendText');
+            return;
+          }
+          const conn = (session as any).conn || (session as any).ws || (session as any).socket;
+          const ready = conn && (conn.readyState === WebSocket.OPEN || conn.ws?.readyState === WebSocket.OPEN || conn.socket?.readyState === WebSocket.OPEN);
+          if (conn && !ready) {
+            this.pendingText.push(text);
+            return;
+          }
+          (session as any).sendRealtimeInput({ text });
+        } catch (err) {
+          console.error('Error sending text to live session:', err);
+        }
+      }).catch(err => console.error('sendText session promise error:', err));
     }
   }
 }

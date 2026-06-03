@@ -9,7 +9,7 @@ import { getFirestore } from "firebase/firestore";
 // Your web app's Firebase configuration
 // For Firebase JS SDK v7.20.0 and later, measurementId is optional
 const firebaseConfig = {
-  apiKey: "AIzaSyBCXpq1ClZ7_KZWgJGsoNdzMjqywWIUjoc",
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
   authDomain: "lisa-ai-asssistant.firebaseapp.com",
   projectId: "lisa-ai-asssistant",
   storageBucket: "lisa-ai-asssistant.firebasestorage.app",
