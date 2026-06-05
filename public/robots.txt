@@ -1,7 +1,0 @@
-User-agent: *
-Allow: /
-Disallow: /server/
-Disallow: /admin/
-Allow: /index.html
-Allow: *.js
-Allow: *.css
