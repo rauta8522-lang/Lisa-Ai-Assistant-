@@ -466,7 +466,9 @@ export default function StudyStudio({ isOpen, onClose, palette, userName }: Stud
 
   // Generate Notes using backend proxy API
     const generateHandwrittenNotes_API = async (modeType: "create" | "pyq" | "scan" | "savedNotes") => { 
-    setLoading(true);
+    // Agar user savedNotes tab par hai, toh API call ki zaroorat nahi hai
+    if (modeType === "savedNotes") return;
+      setLoading(true);
     setStatusMsg("Connecting with Lisa's brain cells...");
     
     try {
@@ -906,6 +908,7 @@ export default function StudyStudio({ isOpen, onClose, palette, userName }: Stud
           window.onload = function() {
             setTimeout(function() {
               window.print();
+              // window.close(); // Optional: Print ke baad tab close karne ke liye
             }, 600);
           }
         </script>
