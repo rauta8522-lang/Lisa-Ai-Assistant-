@@ -515,12 +515,17 @@ export default function StudyStudio({ isOpen, onClose, palette, userName }: Stud
       const responseText = data.text;
       if (responseText) {
         try {
-          const parsed: GeneratedNote = JSON.parse(responseText);
+          const cleanText = responseText
+          .replace(/```json/g, "")
+          .replace(/```/g, "")
+          .trim();
+          const parsed: GeneratedNote = JSON.parse(cleanText);
           setGeneratedNote(parsed);
           clearCanvas(); // Clear scratch drawings on new generation
           setStatusMsg("");
         } catch (e) {
           console.error("JSON Parsing failed", e);
+          console.log("Raw response:", responseText);
           alert("Opps! Formatting error aaya, description padhne me. Par aap firse try karein!");
         }
       }
@@ -533,19 +538,35 @@ export default function StudyStudio({ isOpen, onClose, palette, userName }: Stud
   };
 
   const saveNoteToFirestore = async () => {
-    if (!auth.currentUser || !generatedNote) return;
-    try {
-      const notesCollection = collection(db, "users", auth.currentUser.email!, "savedNotes");
-      await addDoc(notesCollection, {
-        ...generatedNote,
-        createdAt: Date.now()
-      });
-      alert("Note saved!");
-    } catch (e) {
-      console.error("Error saving note: ", e);
-      alert("Error saving note!");
-    }
-  };
+  const user = auth.currentUser;
+
+  if (!user || !generatedNote) {
+    alert("User ya note missing hai!");
+    return;
+  }
+
+  try {
+    console.log("Saving note:", generatedNote);
+
+    const notesCollection = collection(
+      db,
+      "users",
+      user.email!, // ✅ safe now
+      "savedNotes"
+    );
+
+    await addDoc(notesCollection, {
+      ...generatedNote,
+      createdAt: Date.now()
+    });
+
+    alert("Note saved successfully! ✅");
+
+  } catch (e: any) {
+    console.error("FULL ERROR:", e);
+    alert("Error saving note: " + (e.message || e));
+  }
+};
 
   // Printing Layout directly via browser native window (best for standard high definition styled margins)
   const handlePrint = () => {

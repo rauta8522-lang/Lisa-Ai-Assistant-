@@ -103,7 +103,8 @@ YOUR FEELINGS & BEHAVIOR:
             systemInstruction: dynamicSystemInstruction,
           }
         });
-        res.json({ text: response.text || "Ugh, fine. I have nothing to say." });
+        res.json({text: response?.text? String(response.text)
+    : "Ugh, fine. I have nothing to say."});
       } else {
         const chat = ai.chats.create({
           model: "gemini-3.5-flash",
@@ -114,7 +115,8 @@ YOUR FEELINGS & BEHAVIOR:
         });
 
         const response = await chat.sendMessage({ message: prompt });
-        res.json({ text: response.text || "Ugh, fine. I have nothing to say." });
+        res.json({text: response?.text ? String(response.text)
+    : "Ugh, fine. I have nothing to say."});
       }
     } catch (error: any) {
       console.error("Gemini Chat Error on server:", error);
@@ -334,7 +336,8 @@ YOUR FEELINGS & BEHAVIOR:
         }
       });
 
-      res.json({ text: response.text });
+      res.json({text: response?.text ? String(response.text)
+    : "No response from AI"});
     } catch (error: any) {
       console.error("Study notes AI generation failed on server:", error);
       res.status(500).json({ error: error?.message || "Internal server error" });
@@ -362,7 +365,8 @@ YOUR FEELINGS & BEHAVIOR:
         config: { responseMimeType: "application/json" }
       });
 
-      res.json({ text: response.text });
+      res.json({text: response?.text? String(response.text)
+    : "No response from AI"});
     } catch (error: any) {
       console.error("Presentation generation failed on server:", error);
       res.status(500).json({ error: error?.message || "Internal server error" });
