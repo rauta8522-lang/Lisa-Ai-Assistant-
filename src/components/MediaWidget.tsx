@@ -9,26 +9,31 @@ import { ThemePalette } from "../utils/theme";
 interface MediaWidgetProps {
   type: "youtube" | "spotify";
   query: string;
+  videoId?: string | null;
   palette: ThemePalette;
   onClose: () => void;
 }
 
-export default function MediaWidget({ type, query, palette, onClose }: MediaWidgetProps) {
+export default function MediaWidget({ type, query, videoId, palette, onClose }: MediaWidgetProps) {
   const [isMinimized, setIsMinimized] = useState(false);
   const [currentQuery, setCurrentQuery] = useState(query);
+  const [currentVideoId, setCurrentVideoId] = useState<string | null>(videoId || null);
   const [activeType, setActiveType] = useState<"youtube" | "spotify">(type);
   const [searchInputValue, setSearchInputValue] = useState("");
   const [currentWidgetKey, setCurrentWidgetKey] = useState(0); // For forcing iframe reloads on search
 
   // URL Resolvers
-  // YouTube search embed starts playing top matching video automatically!
-  const youtubeEmbedUrl = `https://www.youtube.com/embed?listType=search&list=${encodeURIComponent(currentQuery)}&autoplay=1&mute=0&enablejsapi=1`;
+  // If specific videoId is provided, play it directly, otherwise fallback to list search
+  const youtubeEmbedUrl = currentVideoId
+    ? `https://www.youtube.com/embed/${currentVideoId}?autoplay=1&mute=0&enablejsapi=1`
+    : `https://www.youtube.com/embed?listType=search&list=${encodeURIComponent(currentQuery)}&autoplay=1&mute=0&enablejsapi=1`;
   const spotifyEmbedUrl = `https://open.spotify.com/embed/search?q=${encodeURIComponent(currentQuery)}`;
 
   const handleInlineSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (searchInputValue.trim()) {
       setCurrentQuery(searchInputValue.trim());
+      setCurrentVideoId(null); // Clear specific videoId for manual search standard query fallback
       setSearchInputValue("");
       setCurrentWidgetKey(prev => prev + 1); // Refresh iframe
     }
@@ -41,7 +46,7 @@ export default function MediaWidget({ type, query, palette, onClose }: MediaWidg
 
   const handleExternalRedirect = () => {
     const url = activeType === "youtube"
-      ? `https://www.youtube.com/results?search_query=${encodeURIComponent(currentQuery)}`
+      ? (currentVideoId ? `https://www.youtube.com/watch?v=${currentVideoId}` : `https://www.youtube.com/results?search_query=${encodeURIComponent(currentQuery)}`)
       : `https://open.spotify.com/search/${encodeURIComponent(currentQuery)}`;
     window.open(url, "_blank");
   };

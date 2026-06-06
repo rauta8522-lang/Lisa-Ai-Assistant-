@@ -1,515 +1,347 @@
 import React, { useState } from "react";
-import { motion, AnimatePresence } from "motion/react";
-import { User, Mail, Lock, Sparkles, Eye, EyeOff, Loader2 } from "lucide-react";
-import { auth, googleProvider } from "../config/firebase";
+import { motion } from "motion/react";
 import { signInWithPopup } from "firebase/auth";
+import { Eye, EyeOff, Mail, Lock, User, Loader2 } from "lucide-react";
+import { auth, googleProvider } from "../config/firebase";
+
+const logo = "/pwa-512x512.png";
 
 interface LoginScreenProps {
   onLoginSuccess: (user: { email: string; name: string }) => void;
   onLisaSpeak: (text: string) => void;
 }
 
-interface UserAccount {
-  email: string;
-  name: string;
-  passwordHash: string; // Stored directly per local storage requirements
-}
-
 export default function LoginScreen({ onLoginSuccess, onLisaSpeak }: LoginScreenProps) {
-  const [activeTab, setActiveTab] = useState<"login" | "register">("login");
-  
-  // Login fields
-  const [loginEmail, setLoginEmail] = useState("");
-  const [loginPassword, setLoginPassword] = useState("");
-  
-  // Register fields
-  const [regName, setRegName] = useState("");
-  const [regEmail, setRegEmail] = useState("");
-  const [regPassword, setRegPassword] = useState("");
-  const [regConfirmPassword, setRegConfirmPassword] = useState("");
-  
-  // UI States
+  const [isSignup, setIsSignup] = useState(false);
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [username, setUsername] = useState("");
+  const [signupEmail, setSignupEmail] = useState("");
+  const [signupPassword, setSignupPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
-  const [errorMsg, setErrorMsg] = useState("");
-  const [successMsg, setSuccessMsg] = useState("");
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
 
-  // Helper to fetch registered users
-  const getRegisteredUsers = (): UserAccount[] => {
-    const list = localStorage.getItem("lisa_registered_users");
-    if (list) {
-      try {
-        return JSON.parse(list);
-      } catch (e) {
-        return [];
-      }
-    }
-    return [];
-  };
+  const handleLogin = async () => {
+    setError("");
 
-  // Handle Form actions
-  const handleGoogleLogin = async () => {
-    setIsSubmitting(true);
-    setErrorMsg("");
-    try {
-      const result = await signInWithPopup(auth, googleProvider);
-      const user = result.user;
-      if (user.email && user.displayName) {
-        onLoginSuccess({ email: user.email, name: user.displayName });
-      } else {
-        // Fallback for missing display name
-        onLoginSuccess({ email: user.email || "", name: user.email?.split('@')[0] || "User" });
-      }
-    } catch (err: any) {
-      setErrorMsg("Google login failed.");
-      console.error(err);
-      setIsSubmitting(false);
-    }
-  };
+    const emailVal = email.trim();
+    const passVal = password.trim();
 
-  const handleLoginSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    setErrorMsg("");
-    setSuccessMsg("");
-    
-    if (!loginEmail.trim() || !loginPassword.trim()) {
-      setErrorMsg("Arey! Khali chhod diya? Dono fields bharo!");
+    if (!emailVal || !passVal) {
+      setError("Please complete all fields before continuing.");
       return;
     }
 
-    setIsSubmitting(true);
+    setLoading(true);
     setTimeout(() => {
-      const users = getRegisteredUsers();
+      const list = localStorage.getItem("lisa_registered_users");
+      let users = [];
+      if (list) {
+        try {
+          users = JSON.parse(list);
+        } catch (e) {
+          users = [];
+        }
+      }
+
       const user = users.find(
-        (u) => u.email.toLowerCase() === loginEmail.toLowerCase().trim()
+        (u: any) => u.email.toLowerCase() === emailVal.toLowerCase()
       );
 
       if (!user) {
-        setErrorMsg("Uff! Aisa koi user milahi nahi. Register kiya kya?");
-        setIsSubmitting(false);
+        setError("Uff! Aisa koi user milahi nahi. Register kiya kya?");
+        setLoading(false);
         return;
       }
 
-      if (user.passwordHash !== loginPassword) {
-        setErrorMsg("Oho! Galat password. Kahin bhool toh nahi gaye?");
-        setIsSubmitting(false);
+      if (user.passwordHash !== passVal) {
+        setError("Oho! Galat password. Kahin bhool toh nahi gaye?");
+        setLoading(false);
         return;
       }
 
-      // Success
-      setSuccessMsg(`Aha! Sahi dakhila mila.`);
-      setIsSubmitting(false);
-      
-      // Trigger voice greeting via App
+      setLoading(false);
       onLoginSuccess({ email: user.email, name: user.name });
-    }, 800);
+    }, 700);
   };
 
-  const handleRegisterSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    setErrorMsg("");
-    setSuccessMsg("");
+  const handleSignup = async () => {
+    setError("");
 
-    if (!regName.trim() || !regEmail.trim() || !regPassword || !regConfirmPassword) {
-      setErrorMsg("Sari details dalo ji! Kuch bhi chhodna mana hai.");
+    const nameVal = username.trim();
+    const emailVal = signupEmail.trim();
+    const passVal = signupPassword;
+    const confirmVal = confirmPassword;
+
+    if (!nameVal || !emailVal || !passVal || !confirmVal) {
+      setError("Please complete every field to create your account.");
       return;
     }
 
-    if (regName.trim().length < 2) {
-      setErrorMsg("Aisa kaisa chhota naam? At least 2 letters daalo!");
+    if (nameVal.length < 2) {
+      setError("Aisa kaisa chhota naam? At least 2 letters daalo!");
       return;
     }
 
-    if (!regEmail.includes("@") || !regEmail.includes(".")) {
-      setErrorMsg("Yeh email hai ya mazak? Sahi email thoko!");
+    if (!emailVal.includes("@") || !emailVal.includes(".")) {
+      setError("Yeh email hai ya mazak? Sahi email thoko!");
       return;
     }
 
-    if (regPassword.length < 4) {
-      setErrorMsg("Uff, secret code thoda lamba dalo! (At least 4 keys)");
+    if (passVal.length < 4) {
+      setError("Uff, secret code thoda lamba dalo! (At least 4 keys)");
       return;
     }
 
-    if (regPassword !== regConfirmPassword) {
-      setErrorMsg("Password matches nahi ho rahe! Check karo phirse.");
+    if (passVal !== confirmVal) {
+      setError("Password matches nahi ho rahe! Check karo phirse.");
       return;
     }
 
-    setIsSubmitting(true);
+    setLoading(true);
     setTimeout(() => {
-      const users = getRegisteredUsers();
+      const list = localStorage.getItem("lisa_registered_users") || "[]";
+      let users = [];
+      try {
+        users = JSON.parse(list);
+      } catch (e) {
+        users = [];
+      }
+
       const alreadyExists = users.some(
-        (u) => u.email.toLowerCase() === regEmail.toLowerCase().trim()
+        (u: any) => u.email.toLowerCase() === emailVal.toLowerCase()
       );
 
       if (alreadyExists) {
-        setErrorMsg("Arey! Yeh email toh already registered hai. Log in karo!");
-        setIsSubmitting(false);
+        setError("Arey! Yeh email toh already registered hai. Log in karo!");
+        setLoading(false);
         return;
       }
 
-      const newUser: UserAccount = {
-        email: regEmail.toLowerCase().trim(),
-        name: regName.trim(),
-        passwordHash: regPassword,
+      const newUser = {
+        email: emailVal.toLowerCase(),
+        name: nameVal,
+        passwordHash: passVal,
       };
 
       const updatedList = [...users, newUser];
       localStorage.setItem("lisa_registered_users", JSON.stringify(updatedList));
 
-      setSuccessMsg("Waah! Naya Account ban gaya. Ab jaldi se log in karo!");
-      
-      // Keep name & email filled in login
-      setLoginEmail(newUser.email);
-      setLoginPassword(newUser.passwordHash);
-      
-      setIsSubmitting(false);
-      
-      // Dynamic sassy spoken cue!
+      setLoading(false);
       onLisaSpeak(`Wah kshama, naya account toh ban gaya. Chalo ab fatfat login karo aur shubharambh kijiye!`);
-      
-      // Switch view after 1.5s
-      setTimeout(() => {
-        setActiveTab("login");
-        setSuccessMsg("");
-      }, 1500);
-    }, 1000);
+      onLoginSuccess({ email: newUser.email, name: newUser.name });
+    }, 700);
+  };
+
+  const handleGoogleLogin = async () => {
+    setError("");
+    setLoading(true);
+
+    try {
+      const result = await signInWithPopup(auth, googleProvider);
+      const user = result.user;
+      const emailVal = user.email || "";
+      const nameVal = user.displayName || user.email?.split("@")[0] || "Lisa User";
+
+      // Register Google user locally to be sync compliant
+      const list = localStorage.getItem("lisa_registered_users") || "[]";
+      let users = [];
+      try {
+        users = JSON.parse(list);
+      } catch (e) {
+        users = [];
+      }
+      const alreadyExists = users.some(
+        (u: any) => u.email.toLowerCase() === emailVal.toLowerCase()
+      );
+      if (!alreadyExists) {
+        users.push({
+          email: emailVal,
+          name: nameVal,
+          passwordHash: "",
+        });
+        localStorage.setItem("lisa_registered_users", JSON.stringify(users));
+      }
+
+      onLoginSuccess({ email: emailVal, name: nameVal });
+    } catch (err: any) {
+      setError(err?.message || "Google sign in failed. Try again.");
+      setLoading(false);
+    }
   };
 
   return (
-    <div className="fixed inset-0 z-40 flex items-center justify-center bg-[#02080b]/90 backdrop-blur-xl p-4 overflow-y-auto">
-      {/* Absolute animated background pulses */}
-      <div className="absolute inset-x-0 top-[-20%] h-[60%] bg-violet-600/10 blur-[150px] rounded-full pointer-events-none" />
-      <div className="absolute inset-x-0 bottom-[-20%] h-[60%] bg-pink-600/10 blur-[150px] rounded-full pointer-events-none" />
-
+    <div className="fixed inset-0 z-40 bg-slate-950 text-white flex items-center justify-center px-4 py-8 overflow-y-auto">
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(56,189,248,0.18),_transparent_28%),radial-gradient(circle_at_bottom_right,_rgba(168,85,247,0.16),_transparent_28%)]" />
       <motion.div
-        initial={{ opacity: 0, scale: 0.95, y: 30 }}
-        animate={{ opacity: 1, scale: 1, y: 0 }}
-        transition={{ duration: 0.5, ease: "easeOut" }}
-        className="w-full max-w-md bg-[#0b0c10]/80 border border-white/10 rounded-3xl p-8 md:p-10 shadow-[0_0_50px_rgba(139,92,246,0.15)] flex flex-col relative overflow-hidden backdrop-blur-md"
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.45, ease: "easeOut" }}
+        className="relative z-10 w-full max-w-4xl overflow-hidden rounded-[32px] border border-white/10 bg-slate-900/95 shadow-[0_40px_120px_rgba(15,23,42,0.35)] backdrop-blur-xl"
       >
-        {/* Glow corner decorations */}
-        <div className="absolute -top-10 -right-10 w-24 h-24 bg-pink-500/15 blur-2xl rounded-full pointer-events-none" />
-        <div className="absolute -bottom-10 -left-10 w-24 h-24 bg-violet-500/15 blur-2xl rounded-full pointer-events-none" />
-
-        {/* Header Ribbon */}
-        <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-violet-500 via-fuchsia-500 to-pink-500" />
-
-        {/* Robot/Sassy Logo Icon */}
-        <div className="flex flex-col items-center mb-6 text-center">
-          <div className="relative w-16 h-16 rounded-full bg-gradient-to-tr from-violet-500 to-pink-500 p-[2px] mb-3 flex items-center justify-center shadow-[0_0_20px_rgba(168,85,247,0.4)]">
-            <div className="w-full h-full rounded-full bg-black flex items-center justify-center font-bold font-serif text-2xl text-white">
-              L
+        <div className="grid gap-6 md:grid-cols-[360px_1fr]">
+          <div className="space-y-8 bg-slate-950 p-8 flex items-center justify-center">
+            <div className="flex flex-col items-center">
+              <img src={logo} alt="Lisa" className="h-24 w-24 rounded-3xl border border-white/15 bg-slate-900 shadow-xl" />
             </div>
-            <span className="absolute -bottom-1 -right-1 bg-violet-500 text-[10px] text-white px-2 py-0.5 rounded-full uppercase font-mono tracking-tight shadow">
-              ONLINE
-            </span>
           </div>
-          <h2 className="text-3xl font-serif font-semibold tracking-wider text-white">
-            Lisa AI
-          </h2>
-          <p className="text-white/50 text-xs mt-1 font-mono uppercase tracking-widest">
-            Witty Voice Partner
-          </p>
-        </div>
 
-        {/* Tab Selection */}
-        <div className="flex bg-white/5 p-1 rounded-2xl border border-white/5 mb-6 relative">
-          <button
-            onClick={() => {
-              setActiveTab("login");
-              setErrorMsg("");
-              setSuccessMsg("");
-            }}
-            className={`flex-1 py-2.5 text-center text-sm font-semibold tracking-wide rounded-xl relative z-10 transition-all ${
-              activeTab === "login" ? "text-white" : "text-white/40 hover:text-white/70"
-            }`}
-          >
-            {activeTab === "login" && (
-              <motion.div
-                layoutId="activeTabUnderlay"
-                className="absolute inset-0 bg-white/10 rounded-xl"
-                transition={{ type: "smooth", duration: 0.2 }}
-              />
-            )}
-            Dakhil Ho (Log In)
-          </button>
-          <button
-            onClick={() => {
-              setActiveTab("register");
-              setErrorMsg("");
-              setSuccessMsg("");
-            }}
-            className={`flex-1 py-2.5 text-center text-sm font-semibold tracking-wide rounded-xl relative z-10 transition-all ${
-              activeTab === "register" ? "text-white" : "text-white/40 hover:text-white/70"
-            }`}
-          >
-            {activeTab === "register" && (
-              <motion.div
-                layoutId="activeTabUnderlay"
-                className="absolute inset-0 bg-white/10 rounded-xl"
-                transition={{ type: "smooth", duration: 0.2 }}
-              />
-            )}
-            Naya Account (Register)
-          </button>
-        </div>
-
-        {/* Lisa's Sassy Subtext Box */}
-        <div className="bg-gradient-to-r from-violet-950/40 to-pink-950/40 border border-violet-500/10 rounded-2xl p-4 mb-6 relative">
-          <p className="text-[10px] font-mono uppercase tracking-widest text-violet-300 font-semibold mb-1 flex items-center gap-1">
-            <Sparkles size={10} className="text-pink-400 animate-spin" />
-            Lisa's Tip
-          </p>
-          <p className="text-xs text-white/80 italic leading-relaxed">
-            {activeTab === "login"
-              ? "“Uff, credentials dalo aur ghuso fatfat! Password bhulane ki aadat thodi kam karo please.”"
-              : "“Apna wahi stylish nickname dalo jise pukarne me mujhe thodi feeling aaye. Sunder sa, okay?”"}
-          </p>
-        </div>
-
-        {/* Feedback Alert banners */}
-        <AnimatePresence mode="wait">
-          {errorMsg && (
-            <motion.div
-              initial={{ opacity: 0, y: -10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -10 }}
-              className="bg-red-500/10 border border-red-500/30 text-red-300 text-xs rounded-xl p-3 mb-4 text-center leading-relaxed font-mono shadow-[0_0_10px_rgba(239,68,68,0.1)]"
-            >
-              ⚠️ {errorMsg}
-            </motion.div>
-          )}
-
-          {successMsg && (
-            <motion.div
-              initial={{ opacity: 0, y: -10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -10 }}
-              className="bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 text-xs rounded-xl p-3 mb-4 text-center leading-relaxed font-mono shadow-[0_0_10px_rgba(16,185,129,0.1)]"
-            >
-              ✨ {successMsg}
-            </motion.div>
-          )}
-        </AnimatePresence>
-
-        {/* Form area */}
-        <AnimatePresence mode="wait">
-          {activeTab === "login" ? (
-            <motion.form
-              key="loginForm"
-              initial={{ opacity: 0, x: -10 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: 10 }}
-              onSubmit={handleLoginSubmit}
-              className="flex flex-col gap-4"
-            >
-              {/* Email field */}
-              <div className="flex flex-col gap-1.5">
-                <label className="text-xs font-semibold tracking-wider text-white/60 uppercase">
-                  Email ID
-                </label>
-                <div className="relative flex items-center">
-                  <Mail
-                    size={16}
-                    className="absolute left-3.5 text-white/30 pointer-events-none"
-                  />
-                  <input
-                    type="email"
-                    value={loginEmail}
-                    onChange={(e) => setLoginEmail(e.target.value)}
-                    placeholder="Enter email ID"
-                    required
-                    className="w-full bg-white/[0.03] border border-white/10 hover:border-white/20 focus:border-violet-500 focus:bg-white/[0.05] rounded-xl pl-11 pr-4 py-3 text-sm text-white placeholder-white/20 outline-none transition-all"
-                  />
-                </div>
+          <div className="p-8">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <p className="text-sm uppercase tracking-[0.35em] text-slate-500">Access control</p>
+                <h2 className="mt-3 text-3xl font-semibold text-white">{isSignup ? "Create account" : "Sign in"}</h2>
               </div>
-
-              {/* Password field */}
-              <div className="flex flex-col gap-1.5">
-                <label className="text-xs font-semibold tracking-wider text-white/60 uppercase">
-                  Password
-                </label>
-                <div className="relative flex items-center">
-                  <Lock
-                    size={16}
-                    className="absolute left-3.5 text-white/30 pointer-events-none"
-                  />
-                  <input
-                    type={showPassword ? "text" : "password"}
-                    value={loginPassword}
-                    onChange={(e) => setLoginPassword(e.target.value)}
-                    placeholder="Enter password"
-                    required
-                    className="w-full bg-white/[0.03] border border-white/10 hover:border-white/20 focus:border-violet-500 focus:bg-white/[0.05] rounded-xl pl-11 pr-11 py-3 text-sm text-white placeholder-white/20 outline-none transition-all"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-3.5 p-1 rounded-lg text-white/30 hover:text-white/60 transition-colors"
-                  >
-                    {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
-                  </button>
-                </div>
-              </div>
-
-              {/* Submit Button */}
-              <button
-                type="submit"
-                disabled={isSubmitting}
-                className="w-full mt-2 py-3.5 px-6 rounded-xl font-semibold tracking-wide bg-gradient-to-r from-violet-600 to-pink-600 text-white hover:from-violet-500 hover:to-pink-500 active:scale-[0.98] transition-all flex items-center justify-center gap-2 shadow-[0_4px_20px_rgba(139,92,246,0.3)] disabled:opacity-50"
-              >
-                {isSubmitting ? (
-                  <>
-                    <Loader2 size={18} className="animate-spin" />
-                    Checking user details...
-                  </>
-                ) : (
-                  <>
-                    <span>Chal, Shuru Ho! (Log In)</span>
-                  </>
-                )}
-              </button>
-
-              <div className="relative flex items-center py-2">
-                <div className="flex-grow border-t border-white/10"></div>
-                <span className="flex-shrink mx-4 text-[10px] text-white/30 uppercase font-mono tracking-widest">or</span>
-                <div className="flex-grow border-t border-white/10"></div>
-              </div>
-
               <button
                 type="button"
-                onClick={handleGoogleLogin}
-                disabled={isSubmitting}
-                className="w-full py-3.5 px-6 rounded-xl font-semibold tracking-wide bg-white text-black hover:bg-white/90 active:scale-[0.98] transition-all flex items-center justify-center gap-2 shadow-[0_4px_20px_rgba(255,255,255,0.1)] disabled:opacity-50"
+                onClick={() => {
+                  setError("");
+                  setIsSignup((value) => !value);
+                }}
+                className="inline-flex items-center justify-center rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold text-slate-200 transition hover:bg-white/10 cursor-pointer"
               >
-                <span>Continue with Google</span>
+                {isSignup ? "Switch to sign in" : "Switch to sign up"}
               </button>
-            </motion.form>
-          ) : (
-            <motion.form
-              key="registerForm"
-              initial={{ opacity: 0, x: 10 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: -10 }}
-              onSubmit={handleRegisterSubmit}
-              className="flex flex-col gap-4 overflow-y-auto max-h-[280px] pr-1 scrollbar-hide"
+            </div>
+
+            {error ? (
+              <div className="mt-6 rounded-3xl border border-rose-500/20 bg-rose-500/10 px-5 py-4 text-sm text-rose-100">
+                {error}
+              </div>
+            ) : null}
+
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (isSignup) {
+                  handleSignup();
+                } else {
+                  handleLogin();
+                }
+              }}
+              className="mt-6 space-y-4"
             >
-              {/* Nickname / Display Name */}
-              <div className="flex flex-col gap-1.5">
-                <label className="text-xs font-semibold tracking-wider text-white/60 uppercase">
-                  Sassy Name (AI will address you by this)
+              {isSignup && (
+                <label className="block">
+                  <span className="text-sm font-medium text-slate-300">Sassy Name (Full name)</span>
+                  <div className="relative mt-2">
+                    <User className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-500" />
+                    <input
+                      value={username}
+                      onChange={(e) => setUsername(e.target.value)}
+                      type="text"
+                      placeholder="Your sassy name"
+                      className="w-full rounded-3xl border border-slate-700 bg-slate-950/90 py-4 pl-12 pr-4 text-white outline-none transition focus:border-sky-500 focus:ring-2 focus:ring-sky-500/20"
+                    />
+                  </div>
                 </label>
-                <div className="relative flex items-center">
-                  <User
-                    size={16}
-                    className="absolute left-3.5 text-white/30 pointer-events-none"
-                  />
-                  <input
-                    type="text"
-                    value={regName}
-                    onChange={(e) => setRegName(e.target.value)}
-                    placeholder="e.g. Rahul, Tanya, Simran"
-                    required
-                    className="w-full bg-white/[0.03] border border-white/10 hover:border-white/20 focus:border-violet-500 focus:bg-white/[0.05] rounded-xl pl-11 pr-4 py-3 text-sm text-white placeholder-white/20 outline-none transition-all"
-                  />
-                </div>
-              </div>
+              )}
 
-              {/* Register Email */}
-              <div className="flex flex-col gap-1.5">
-                <label className="text-xs font-semibold tracking-wider text-white/60 uppercase">
-                  Email URL / Account Identifier
-                </label>
-                <div className="relative flex items-center">
-                  <Mail
-                    size={16}
-                    className="absolute left-3.5 text-white/30 pointer-events-none"
-                  />
+              <label className="block">
+                <span className="text-sm font-medium text-slate-300">Email address</span>
+                <div className="relative mt-2">
+                  <Mail className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-500" />
                   <input
+                    value={isSignup ? signupEmail : email}
+                    onChange={(e) => (isSignup ? setSignupEmail(e.target.value) : setEmail(e.target.value))}
                     type="email"
-                    value={regEmail}
-                    onChange={(e) => setRegEmail(e.target.value)}
-                    placeholder="Enter real or alias email"
-                    required
-                    className="w-full bg-white/[0.03] border border-white/10 hover:border-white/20 focus:border-violet-500 focus:bg-white/[0.05] rounded-xl pl-11 pr-4 py-3 text-sm text-white placeholder-white/20 outline-none transition-all"
+                    placeholder="name@example.com"
+                    className="w-full rounded-3xl border border-slate-700 bg-slate-950/90 py-4 pl-12 pr-4 text-white outline-none transition focus:border-sky-500 focus:ring-2 focus:ring-sky-500/20"
                   />
                 </div>
-              </div>
+              </label>
 
-              {/* Password */}
-              <div className="flex flex-col gap-1.5">
-                <label className="text-xs font-semibold tracking-wider text-white/60 uppercase">
-                  Pin / Password
-                </label>
-                <div className="relative flex items-center">
-                  <Lock
-                    size={16}
-                    className="absolute left-3.5 text-white/30 pointer-events-none"
-                  />
+              <label className="block">
+                <span className="text-sm font-medium text-slate-300">Password</span>
+                <div className="relative mt-2">
+                  <Lock className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-500" />
                   <input
+                    value={isSignup ? signupPassword : password}
+                    onChange={(e) => (isSignup ? setSignupPassword(e.target.value) : setPassword(e.target.value))}
                     type={showPassword ? "text" : "password"}
-                    value={regPassword}
-                    onChange={(e) => setRegPassword(e.target.value)}
-                    placeholder="Set private PIN/Password"
-                    required
-                    className="w-full bg-white/[0.03] border border-white/10 hover:border-white/20 focus:border-violet-500 focus:bg-white/[0.05] rounded-xl pl-11 pr-11 py-3 text-sm text-white placeholder-white/20 outline-none transition-all"
+                    placeholder="Enter your password"
+                    className="w-full rounded-3xl border border-slate-700 bg-slate-950/90 py-4 pl-12 pr-12 text-white outline-none transition focus:border-sky-500 focus:ring-2 focus:ring-sky-500/20"
                   />
                   <button
                     type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-3.5 p-1 rounded-lg text-white/30 hover:text-white/60 transition-colors"
+                    onClick={() => setShowPassword((value) => !value)}
+                    className="absolute right-4 top-1/2 inline-flex h-10 w-10 items-center justify-center rounded-full text-slate-400 transition hover:text-white"
                   >
-                    {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                    {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                   </button>
                 </div>
-              </div>
+              </label>
 
-              {/* Confirm Password */}
-              <div className="flex flex-col gap-1.5">
-                <label className="text-xs font-semibold tracking-wider text-white/60 uppercase">
-                  Confirm Code
-                </label>
-                <div className="relative flex items-center">
-                  <Lock
-                    size={16}
-                    className="absolute left-3.5 text-white/30 pointer-events-none"
-                  />
+              {isSignup && (
+                <label className="block">
+                  <span className="text-sm font-medium text-slate-300">Confirm password</span>
                   <input
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
                     type={showPassword ? "text" : "password"}
-                    value={regConfirmPassword}
-                    onChange={(e) => setRegConfirmPassword(e.target.value)}
-                    placeholder="Verify code"
-                    required
-                    className="w-full bg-white/[0.03] border border-white/10 hover:border-white/20 focus:border-violet-500 focus:bg-white/[0.05] rounded-xl pl-11 pr-4 py-3 text-sm text-white placeholder-white/20 outline-none transition-all"
+                    placeholder="Repeat your password"
+                    className="mt-2 w-full rounded-3xl border border-slate-700 bg-slate-950/90 py-4 px-5 text-white outline-none transition focus:border-sky-500 focus:ring-2 focus:ring-sky-500/20"
                   />
+                </label>
+              )}
+
+              {!isSignup && (
+                <div className="text-right text-sm">
+                  <button type="button" className="font-medium text-slate-400 hover:text-white transition">
+                    Forgot password?
+                  </button>
                 </div>
+              )}
+
+              <div className="mt-8 grid gap-3">
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="inline-flex h-14 items-center justify-center rounded-3xl bg-gradient-to-r from-sky-500 to-violet-500 px-5 text-base font-semibold text-white shadow-lg shadow-sky-500/20 transition disabled:cursor-not-allowed disabled:opacity-60 cursor-pointer animate-none"
+                >
+                  {loading ? (
+                    <div className="flex items-center gap-2">
+                      <Loader2 size={18} className="animate-spin" />
+                      <span>Processing…</span>
+                    </div>
+                  ) : isSignup ? (
+                    "Create account"
+                  ) : (
+                    "Sign in"
+                  )}
+                </button>
+                <button
+                  type="button"
+                  onClick={handleGoogleLogin}
+                  disabled={loading}
+                  className="inline-flex h-14 items-center justify-center rounded-3xl border border-white/10 bg-white/10 px-5 text-base font-semibold text-white transition hover:bg-white/15 disabled:cursor-not-allowed disabled:opacity-60 cursor-pointer"
+                >
+                  Continue with Google
+                </button>
               </div>
+            </form>
 
-              {/* Submit Register Button */}
+            <div className="mt-6 flex flex-col gap-3 border-t border-slate-800 pt-6 text-sm text-slate-400 sm:flex-row sm:items-center sm:justify-between">
+              <span>{isSignup ? "Already have an account?" : "New to Lisa?"}</span>
               <button
-                type="submit"
-                disabled={isSubmitting}
-                className="w-full mt-2 py-3.5 px-6 rounded-xl font-semibold tracking-wide bg-gradient-to-r from-violet-600 to-pink-600 text-white hover:from-violet-500 hover:to-pink-500 active:scale-[0.98] transition-all flex items-center justify-center gap-2 shadow-[0_4px_20px_rgba(139,92,246,0.3)] disabled:opacity-50"
+                type="button"
+                onClick={() => {
+                  setError("");
+                  setIsSignup((value) => !value);
+                }}
+                className="font-medium text-slate-100 transition hover:text-white cursor-pointer text-left"
               >
-                {isSubmitting ? (
-                  <>
-                    <Loader2 size={18} className="animate-spin" />
-                    Creating account...
-                  </>
-                ) : (
-                  <>
-                    <span>Account Khata Kholen (Register)</span>
-                  </>
-                )}
+                {isSignup ? "Sign in instead" : "Create an account"}
               </button>
-            </motion.form>
-          )}
-        </AnimatePresence>
+            </div>
+          </div>
+        </div>
 
-        <p className="text-white/25 text-[10px] text-center mt-6 tracking-wide font-mono">
-          Made with ❤️ for Voice Companion Systems • Secures client-side
-        </p>
+        <div className="border-t border-slate-800 bg-slate-950/90 px-8 py-5 text-center text-sm text-slate-500">
+          Trusted local access that keeps you signed in until you choose to log out.
+        </div>
       </motion.div>
     </div>
   );

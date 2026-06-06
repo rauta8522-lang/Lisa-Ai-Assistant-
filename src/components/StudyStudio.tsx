@@ -3,7 +3,8 @@ import { motion, AnimatePresence } from "framer-motion";
 import { 
   X, Sparkles, BookOpen, Upload, Download, Copy, Check, 
   RefreshCw, Award, ArrowUpRight, HelpCircle, PenTool, Highlighter, 
-  Trash2, Layers, AlertCircle, Plus, Eye, ChevronRight, FileText
+  Trash2, Layers, AlertCircle, Plus, Eye, ChevronRight, FileText,
+  Camera, Video
 } from "lucide-react";
 import { ThemePalette } from "../utils/theme";
 import { auth, db } from "../config/firebase";
@@ -199,6 +200,65 @@ export default function StudyStudio({ isOpen, onClose, palette, userName }: Stud
   const [fileType, setFileType] = useState<string>("");
   const [fileBase64, setFileBase64] = useState<string | null>(null);
   const [ocrStatus, setOcrStatus] = useState<string>("");
+
+  // Webcam capture states for scanner
+  const [isWebcamOpen, setIsWebcamOpen] = useState(false);
+  const [webcamStream, setWebcamStream] = useState<MediaStream | null>(null);
+  const webcamVideoRef = useRef<HTMLVideoElement | null>(null);
+
+  // Webcam helper functions
+  const startWebcamScanner = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { width: 1280, height: 720 } });
+      setWebcamStream(stream);
+      setIsWebcamOpen(true);
+      setTimeout(() => {
+        if (webcamVideoRef.current) {
+          webcamVideoRef.current.srcObject = stream;
+        }
+      }, 150);
+    } catch (err) {
+      console.error("Camera scanner error:", err);
+      alert("Uh-oh! Camera access block hai ya hardware missing hai. Please browser settings me permission check karein.");
+    }
+  };
+
+  const stopWebcamScanner = () => {
+    if (webcamStream) {
+      webcamStream.getTracks().forEach((track) => track.stop());
+      setWebcamStream(null);
+    }
+    setIsWebcamOpen(false);
+  };
+
+  const captureWebcamSnapshot = () => {
+    const video = webcamVideoRef.current;
+    if (!video) return;
+
+    const canvas = document.createElement("canvas");
+    canvas.width = video.videoWidth || 1280;
+    canvas.height = video.videoHeight || 720;
+    const ctx = canvas.getContext("2d");
+    if (ctx) {
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      const dataUrl = canvas.toDataURL("image/jpeg", 0.9);
+      const base64Str = dataUrl.split(",")[1];
+      
+      setFile(new File([new Blob()], "snapped_question.jpg", { type: "image/jpeg" }));
+      setFileBase64(base64Str);
+      setFileType("image/jpeg");
+      setOcrStatus("Camera capture loaded successfully!");
+      stopWebcamScanner();
+    }
+  };
+
+  useEffect(() => {
+    return () => {
+      if (webcamStream) {
+        webcamStream.getTracks().forEach((track) => track.stop());
+      }
+    };
+  }, [webcamStream]);
 
   // Notebook aesthetics
   const [paperStyle, setPaperStyle] = useState<"ruled" | "bullet" | "blueprint">("ruled");
@@ -405,7 +465,7 @@ export default function StudyStudio({ isOpen, onClose, palette, userName }: Stud
   }, [activeTab]);
 
   // Generate Notes using backend proxy API
-  const generateHandwrittenNotes_API = async (modeType: "create" | "pyq" | "scan") => {
+    const generateHandwrittenNotes_API = async (modeType: "create" | "pyq" | "scan" | "savedNotes") => { 
     setLoading(true);
     setStatusMsg("Connecting with Lisa's brain cells...");
     
@@ -1022,27 +1082,86 @@ export default function StudyStudio({ isOpen, onClose, palette, userName }: Stud
 
               {activeTab === "scan" && (
                 <div className="space-y-4">
-                  <div className="space-y-1">
-                    <label className="text-[10px] font-mono uppercase text-white/40 tracking-wider font-semibold">Upload Question Doc (PDF/PNG/JPG)</label>
-                    <div
-                      onDragOver={handleDragOver}
-                      onDrop={handleDrop}
-                      className="border-2 border-dashed border-white/10 hover:border-emerald-500 bg-white/[0.02] p-5 rounded-2xl flex flex-col items-center justify-center text-center cursor-pointer transition-all gap-2 group min-h-[140px]"
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => { stopWebcamScanner(); }}
+                      className={`flex-1 py-1.5 rounded-lg text-[10px] font-mono uppercase tracking-wider border cursor-pointer text-center ${
+                        !isWebcamOpen 
+                          ? "bg-white/10 text-white border-white/10" 
+                          : "bg-transparent text-white/50 border-white/5 hover:text-white"
+                      }`}
                     >
-                      <input
-                        type="file"
-                        accept="image/*,application/pdf"
-                        onChange={handleFileChange}
-                        className="hidden"
-                        id="document-notes-uploader"
-                      />
-                      <label htmlFor="document-notes-uploader" className="flex flex-col items-center justify-center cursor-pointer">
-                        <Upload size={24} className="text-white/30 group-hover:text-emerald-400 group-hover:scale-110 transition-all mb-1" />
-                        <span className="text-xs font-medium text-white/80">Question paper ya photo khicho</span>
-                        <span className="text-[9px] font-mono text-white/30 mt-0.5">Drag & Drop PDF or Image file</span>
-                      </label>
-                    </div>
+                      Upload File
+                    </button>
+                    <button
+                      onClick={() => { startWebcamScanner(); }}
+                      className={`flex-1 py-1.5 rounded-lg text-[10px] font-mono uppercase tracking-wider border cursor-pointer text-center flex items-center justify-center gap-1.5 ${
+                        isWebcamOpen 
+                          ? "bg-[#10b981]/10 text-[#10b981] border-[#10b981]/35 animate-pulse" 
+                          : "bg-transparent text-white/40 hover:text-white/80 border-white/5 hover:border-white/10"
+                      }`}
+                    >
+                      <Camera size={12} />
+                      <span>Use Camera 📸</span>
+                    </button>
                   </div>
+
+                  {!isWebcamOpen ? (
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-mono uppercase text-white/40 tracking-wider font-semibold">Upload Question Doc (PDF/PNG/JPG)</label>
+                      <div
+                        onDragOver={handleDragOver}
+                        onDrop={handleDrop}
+                        className="border-2 border-dashed border-white/10 hover:border-emerald-500 bg-white/[0.02] p-5 rounded-2xl flex flex-col items-center justify-center text-center cursor-pointer transition-all gap-2 group min-h-[140px]"
+                      >
+                        <input
+                          type="file"
+                          accept="image/*,application/pdf"
+                          onChange={handleFileChange}
+                          className="hidden"
+                          id="document-notes-uploader"
+                        />
+                        <label htmlFor="document-notes-uploader" className="flex flex-col items-center justify-center cursor-pointer">
+                          <Upload size={24} className="text-white/30 group-hover:text-emerald-400 group-hover:scale-110 transition-all mb-1" />
+                          <span className="text-xs font-medium text-white/80">Question paper ya photo khicho</span>
+                          <span className="text-[9px] font-mono text-white/30 mt-0.5">Drag & Drop PDF or Image file</span>
+                        </label>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="space-y-2 border border-emerald-500/20 bg-black/60 rounded-2xl p-3 overflow-hidden">
+                      <div className="relative aspect-video rounded-xl bg-black overflow-hidden border border-white/5 group">
+                        <video
+                          ref={webcamVideoRef}
+                          autoPlay
+                          playsInline
+                          className="w-full h-full object-cover"
+                        />
+                        <div className="absolute top-2 left-2 px-1.5 py-0.5 bg-black/70 border border-[#10b981]/30 rounded-md flex items-center gap-1">
+                          <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping" />
+                          <span className="text-[8px] font-mono uppercase tracking-widest text-[#10b981]">LIVE FEED</span>
+                        </div>
+                      </div>
+
+                      <div className="flex gap-2 pt-1">
+                        <button
+                          type="button"
+                          onClick={captureWebcamSnapshot}
+                          className="flex-1 py-2 bg-emerald-500 hover:bg-emerald-400 text-black font-semibold rounded-xl text-xs flex items-center justify-center gap-1.5 cursor-pointer shadow-lg transition-transform active:scale-95 font-medium"
+                        >
+                          <Camera size={14} />
+                          <span>Maro Snap! (Snap Photo) 📸</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={stopWebcamScanner}
+                          className="px-3 py-2 bg-white/5 hover:bg-white/10 text-white rounded-xl text-xs cursor-pointer border border-white/5 hover:border-white/10 transition-colors"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  )}
 
                   {file && (
                     <div className="bg-white/[0.03] border border-white/10 rounded-xl p-3 flex items-center justify-between gap-2">

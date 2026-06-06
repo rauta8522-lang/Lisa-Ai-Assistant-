@@ -14,15 +14,17 @@ export class LiveSessionManager {
   private userName: string;
   private voiceHistoryContext: string;
   private customMemory: string;
+  private voice: string;
   
   public onStateChange: (state: "idle" | "listening" | "processing" | "speaking") => void = () => {};
   public onMessage: (sender: "user" | "lisa", text: string) => void = () => {};
   public onCommand: (url: string) => void = () => {};
 
-  constructor(userName: string = "user", voiceHistoryContext: string = "", customMemory: string = "") {
+  constructor(userName: string = "user", voiceHistoryContext: string = "", customMemory: string = "", voice: string = "Kore") {
     this.userName = userName;
     this.voiceHistoryContext = voiceHistoryContext;
     this.customMemory = customMemory;
+    this.voice = voice;
   }
 
   async start() {
@@ -77,7 +79,7 @@ export class LiveSessionManager {
 
       const proto = window.location.protocol === "https:" ? "wss:" : "ws:";
       const host = window.location.host;
-      const wsUrl = `${proto}//${host}/live?userName=${encodeURIComponent(this.userName)}&voiceHistoryContext=${encodeURIComponent(this.voiceHistoryContext)}&customMemory=${encodeURIComponent(this.customMemory)}`;
+      const wsUrl = `${proto}//${host}/live?userName=${encodeURIComponent(this.userName)}&voiceHistoryContext=${encodeURIComponent(this.voiceHistoryContext)}&customMemory=${encodeURIComponent(this.customMemory)}&voice=${encodeURIComponent(this.voice)}`;
       
       this.ws = new WebSocket(wsUrl);
 

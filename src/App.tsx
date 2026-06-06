@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
-import { Mic, MicOff, Loader2, Volume2, VolumeX, Keyboard, Send, Trash2, User, Settings, MessageSquare, Palette, BookOpen, MessageCircle, FileText, X, Play } from "lucide-react";
+import { Mic, MicOff, Loader2, Volume2, VolumeX, Keyboard, Send, Trash2, User, Settings, MessageSquare, Palette, BookOpen, MessageCircle, FileText, X, Play, Camera } from "lucide-react";
 import { getLisaResponse, getLisaAudio, resetLisaSession } from "./services/geminiService";
 import { processCommand } from "./services/commandService";
 import { LiveSessionManager } from "./services/liveService";
@@ -10,11 +10,10 @@ import ProfileModal from "./components/ProfileModal";
 import StudyStudio from "./components/StudyStudio";
 import PDFMaker from "./components/PDFMaker";
 import BiometricLockScreen from "./components/BiometricLockScreen";
-import { playPCM } from "./utils/audioUtils";
+import { playPCM, speakWithWebSpeech } from "./utils/audioUtils";
 import { motion, AnimatePresence } from "motion/react";
 import { THEME_PALETTES, ThemePalette } from "./utils/theme";
 import { getUserAvatarUrl } from "./utils/avatar";
-import MediaWidget from "./components/MediaWidget";
 import { parseWhatsAppCommand, getWhatsAppContacts, linkWhatsAppContact, getWhatsAppUrl } from "./utils/whatsapp";
 import { auth, db } from "./config/firebase";
 import { onAuthStateChanged } from "firebase/auth";
@@ -35,64 +34,108 @@ declare global {
   }
 }
 
-function detectAndPlayMedia(text: string): { type: "youtube" | "spotify"; query: string } | null {
+function detectAndPlayMedia(text: string): { type: "youtube" | "spotify"; query: string; mode: "play" | "search" } | null {
   const norm = text.toLowerCase().trim();
-  
-  // 1. YouTube specific Roman Hindi & English patterns
-  const ytHindiPatterns = [
-    /youtube\s+(?:par|pe|p)\s+(.+?)\s+(?:chalao|bajao|chalana|play|suna|sunao|dekhna|dikhao)/,
-    /(?:play|chalao|bajao|dekhna)\s+(.+?)\s+(?:on\s+youtube|youtube\s+par|youtube\s+pe|youtube)/,
-    /youtube\s+(.+?)\s+(?:song|video|gaan|gana|ganna)/,
-  ];
 
-  for (const regex of ytHindiPatterns) {
-    const m = norm.match(regex);
-    if (m && m[1]) {
-      const q = m[1].replace(/ka\s+song|ka\s+video|ka\s+gana|song|video|gana/g, "").trim();
-      if (q) return { type: "youtube", query: q };
-    }
-  }
-
-  // Exact fallback check for "on youtube", "youtube par/pe"
-  if (norm.includes("youtube") || norm.includes("utube")) {
-    const cleanYt = norm.replace(/youtube|utube|on|par|pe|play|chalao|bajao|song|video|gana|chalana/g, " ").replace(/\s+/g, " ").trim();
-    if (cleanYt) {
-      return { type: "youtube", query: cleanYt };
-    }
-  }
-
-  // 2. Spotify specific Roman Hindi & English patterns
-  const spHindiPatterns = [
-    /spotify\s+(?:par|pe|p)\s+(.+?)\s+(?:chalao|bajao|chalana|play|suna|sunao)/,
-    /(?:play|chalao|bajao)\s+(.+?)\s+(?:on\s+spotify|spotify\s+par|spotify\s+pe|spotify)/,
-    /spotify\s+(.+?)\s+(?:song|music|track)/,
-  ];
-
-  for (const regex of spHindiPatterns) {
-    const m = norm.match(regex);
-    if (m && m[1]) {
-      const q = m[1].replace(/ka\s+song|ka\s+music|song|track|gana/g, "").trim();
-      if (q) return { type: "spotify", query: q };
-    }
-  }
-
+  let type: "youtube" | "spotify" = "youtube";
   if (norm.includes("spotify")) {
-    const cleanSp = norm.replace(/spotify|on|par|pe|play|chalao|bajao|song|track|gana/g, " ").replace(/\s+/g, " ").trim();
-    if (cleanSp) {
-      return { type: "spotify", query: cleanSp };
-    }
+    type = "spotify";
   }
 
-  // 3. Generic "play [song]" patterns that default to YouTube (if long enough)
-  if (norm.startsWith("play ") || norm.endsWith(" chalao") || norm.endsWith(" bajao") || norm.endsWith(" sunao")) {
-    const cleanGeneric = norm
-      .replace(/^play\s+/, "")
-      .replace(/\s+(?:chalao|bajao|sunao|suna)$/, "")
-      .replace(/(?:ka\s+)?song|video|gana/g, "")
-      .trim();
-    if (cleanGeneric.length > 2) {
-      return { type: "youtube", query: cleanGeneric };
-    }
+  // Detect search vs play intent
+  const isSearchIntent = 
+    norm.includes("search") || 
+    norm.includes("khojo") || 
+    norm.includes("khojna") || 
+    norm.includes("dhundho") || 
+    norm.includes("dhoondho") || 
+    norm.includes("dhoondo") || 
+    norm.includes("dhundo") || 
+    norm.includes("results") || 
+    norm.includes("find");
+
+  const mode: "play" | "search" = isSearchIntent ? "search" : "play";
+
+  // Verify it qualifies as a media command
+  const hasMediaKeywords = 
+    norm.includes("youtube") || 
+    norm.includes("utube") || 
+    norm.includes("spotify") || 
+    norm.includes("play") || 
+    norm.includes("chalao") || 
+    norm.includes("bajao") || 
+    norm.includes("sunao") || 
+    norm.includes("suna") || 
+    norm.includes("chalana") || 
+    norm.includes("chala") || 
+    norm.includes("baja") || 
+    norm.includes("gana") || 
+    norm.includes("song") || 
+    norm.includes("video") || 
+    norm.includes("search") || 
+    norm.includes("khojo") || 
+    norm.includes("dhundho") || 
+    norm.includes("dhoondho");
+
+  if (!hasMediaKeywords) {
+    return null;
+  }
+
+  // Clean the query strictly
+  let query = norm;
+
+  // Remove platforms
+  query = query.replace(/\byoutube\b/g, "")
+               .replace(/\byutube\b/g, "")
+               .replace(/\bspotify\b/g, "");
+
+  // Remove action verbs/fillers
+  query = query.replace(/\bplay\b/g, "")
+               .replace(/\bsearch\b/g, "")
+               .replace(/\bkaro\b/g, "")
+               .replace(/\bkro\b/g, "")
+               .replace(/\bkar\b/g, "")
+               .replace(/\bkhojo\b/g, "")
+               .replace(/\bkhojna\b/g, "")
+               .replace(/\bdhundho\b/g, "")
+               .replace(/\bdhoondho\b/g, "")
+               .replace(/\bdhoondo\b/g, "")
+               .replace(/\bdhundo\b/g, "")
+               .replace(/\bfind\b/g, "")
+               .replace(/\bresults\b/g, "")
+               .replace(/\bchalao\b/g, "")
+               .replace(/\bbajao\b/g, "")
+               .replace(/\bsunao\b/g, "")
+               .replace(/\bsuna\b/g, "")
+               .replace(/\bchalana\b/g, "")
+               .replace(/\bbaja\b/g, "")
+               .replace(/\bchala\b/g, "")
+               .replace(/\bdekhna\b/g, "")
+               .replace(/\bdikhao\b/g, "");
+
+  // Remove common media suffixes
+  query = query.replace(/\bka\s+song\b/g, " ")
+               .replace(/\bka\s+video\b/g, " ")
+               .replace(/\bka\s+gan[aa]\b/g, " ")
+               .replace(/\bka\s+music\b/g, " ")
+               .replace(/\bka\s+gaan\b/g, " ")
+               .replace(/\bka\s+ganna\b/g, " ")
+               .replace(/\bsong\b/g, " ")
+               .replace(/\bvideo\b/g, " ")
+               .replace(/\bgan[aa]\b/g, " ")
+               .replace(/\bmusic\b/g, " ")
+               .replace(/\bgaan\b/g, " ")
+               .replace(/\bganna\b/g, " ")
+               .replace(/\btrack\b/g, " ")
+               .replace(/\bpe\b/g, " ")
+               .replace(/\bpar\b/g, " ")
+               .replace(/\bp\b/g, " ")
+               .replace(/\bon\b/g, " ");
+
+  query = query.replace(/\s+/g, " ").trim();
+
+  if (query.length > 1) {
+    return { type, query, mode };
   }
 
   return null;
@@ -145,6 +188,57 @@ export default function App() {
   const [isChatOpen, setIsChatOpen] = useState(true);
   const [isStudyOpen, setIsStudyOpen] = useState(false);
   const [isPDFMakerOpen, setIsPDFMakerOpen] = useState(false);
+
+  // Home Screen Vision Chat Camera states
+  const [isChatWebcamActive, setIsChatWebcamActive] = useState(false);
+  const [chatWebcamStream, setChatWebcamStream] = useState<MediaStream | null>(null);
+  const [chatCapturedImage, setChatCapturedImage] = useState<string | null>(null);
+  const [chatCameraLoading, setChatCameraLoading] = useState(false);
+  const chatWebcamRef = useRef<HTMLVideoElement | null>(null);
+
+  // Home Screen Vision Chat Camera helpers
+  const startChatWebcam = async () => {
+    setChatCameraLoading(true);
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480 } });
+      setChatWebcamStream(stream);
+      setIsChatWebcamActive(true);
+      setTimeout(() => {
+        if (chatWebcamRef.current) {
+          chatWebcamRef.current.srcObject = stream;
+        }
+      }, 150);
+    } catch (err) {
+      console.error("Failed to access camera", err);
+      alert("Uh-oh! Camera block ya missing hai malka!");
+    } finally {
+      setChatCameraLoading(false);
+    }
+  };
+
+  const stopChatWebcam = useCallback(() => {
+    if (chatWebcamStream) {
+      chatWebcamStream.getTracks().forEach((track) => track.stop());
+      setChatWebcamStream(null);
+    }
+    setIsChatWebcamActive(false);
+  }, [chatWebcamStream]);
+
+  const captureChatPhoto = () => {
+    const video = chatWebcamRef.current;
+    if (!video) return;
+
+    const canvas = document.createElement("canvas");
+    canvas.width = video.videoWidth || 640;
+    canvas.height = video.videoHeight || 480;
+    const ctx = canvas.getContext("2d");
+    if (ctx) {
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      const dataUrl = canvas.toDataURL("image/jpeg", 0.85);
+      setChatCapturedImage(dataUrl);
+      stopChatWebcam();
+    }
+  };
 
   const [activePalette, setActivePalette] = useState<ThemePalette>(() => {
     const saved = localStorage.getItem("lisa_ui_palette");
@@ -242,7 +336,7 @@ export default function App() {
   }, [voiceMessages]);
 
   const [isMuted, setIsMuted] = useState(false);
-  const [activeMedia, setActiveMedia] = useState<{ type: "youtube" | "spotify"; query: string } | null>(null);
+  const [activeMedia, setActiveMedia] = useState<{ type: "youtube" | "spotify"; query: string; videoId?: string | null } | null>(null);
 
   // States: WhatsApp Prompter
   const [pendingWaMessage, setPendingWaMessage] = useState<{ name: string; message: string } | null>(null);
@@ -279,15 +373,24 @@ export default function App() {
     if (isMuted) return;
     setAppState("speaking");
     try {
-      const audioBase64 = await getLisaAudio(phrase);
+      const preferredVoiceStr = currentUser ? (localStorage.getItem(`lisa_preferred_voice_${currentUser.email}`) || "Kore") : "Kore";
+      const audioBase64 = await getLisaAudio(phrase, preferredVoiceStr);
       if (audioBase64) {
         await playPCM(audioBase64);
+      } else {
+        // Fallback to browser TTS if no audio returned
+        await speakWithWebSpeech(phrase);
       }
     } catch (e) {
-      console.error("Speak helper failed", e);
+      console.error("Speak helper failed, falling back to Web Speech:", e);
+      try {
+        await speakWithWebSpeech(phrase);
+      } catch (err) {
+        console.error("Web Speech fallback also failed:", err);
+      }
     }
     setAppState("idle");
-  }, [isMuted]);
+  }, [isMuted, currentUser]);
 
   useEffect(() => {
     if (liveSessionRef.current) {
@@ -353,14 +456,7 @@ export default function App() {
       const responseText = responses[Math.floor(Math.random() * responses.length)];
       setMessages((prev) => [...prev, { id: Date.now().toString() + "-l", sender: "lisa", text: responseText }]);
       
-      if (!isMuted) {
-        setAppState("speaking");
-        const audioBase64 = await getLisaAudio(responseText);
-        if (audioBase64) {
-          await playPCM(audioBase64);
-        }
-      }
-      setAppState("idle");
+      await handleLisaSpeak(responseText);
       return;
     }
 
@@ -379,14 +475,7 @@ export default function App() {
 
       setMessages((prev) => [...prev, { id: Date.now().toString() + "-l", sender: "lisa", text: responseText }]);
       
-      if (!isMuted) {
-        setAppState("speaking");
-        const audioBase64 = await getLisaAudio(responseText);
-        if (audioBase64) {
-          await playPCM(audioBase64);
-        }
-      }
-      setAppState("idle");
+      await handleLisaSpeak(responseText);
       return;
     }
 
@@ -395,14 +484,32 @@ export default function App() {
     // Intercept direct media queries first (YouTube/Spotify embedding)
     const mediaToPlay = detectAndPlayMedia(finalTranscript);
     if (mediaToPlay) {
+      const isYt = mediaToPlay.type === "youtube";
+      const isPlayMode = mediaToPlay.mode === "play";
+      let videoIdToUse: string | null = null;
+
+      if (isYt && isPlayMode) {
+        try {
+          const resp = await fetch(`/api/youtube/search?q=${encodeURIComponent(mediaToPlay.query)}`);
+          if (resp.ok) {
+            const data = await resp.json();
+            if (data && data.videoId) {
+              videoIdToUse = data.videoId;
+            }
+          }
+        } catch (fetchErr) {
+          console.error("Error fetching videoId:", fetchErr);
+        }
+      }
+
       setActiveMedia({
         type: mediaToPlay.type,
-        query: mediaToPlay.query
+        query: mediaToPlay.query,
+        videoId: videoIdToUse
       });
       
-      const isYt = mediaToPlay.type === "youtube";
       const targetUrl = isYt 
-        ? `https://www.youtube.com/results?search_query=${encodeURIComponent(mediaToPlay.query)}`
+        ? (videoIdToUse ? `https://www.youtube.com/watch?v=${videoIdToUse}` : `https://www.youtube.com/results?search_query=${encodeURIComponent(mediaToPlay.query)}`)
         : `https://open.spotify.com/search/${encodeURIComponent(mediaToPlay.query)}`;
       
       try {
@@ -411,23 +518,28 @@ export default function App() {
         console.error("Popup window blocked", err);
       }
       
-      const responses = [
-        `Arre wah! Maine background me aur alag tab me tumhara ${isYt ? "YouTube video" : "Spotify track"} chala diya hai. Gana enjoy kijiye! ✨`,
-        `Le bhai, tumhare liye ${isYt ? "YouTube" : "Spotify"} par "${mediaToPlay.query}" ek naye tab me chala diya. Aur background me bhi activated hai! 😉`,
-        `Haaanji! Chala diya tumhara "${mediaToPlay.query}" song alag tab me directly. Lisa hamesha active hai! 😎`
-      ];
+      const responses = !isPlayMode
+        ? [
+            `Arre! Maine "${mediaToPlay.query}" search kar diya hai YouTube par. Results dekh lijiye! 🔍`,
+            `Haaanji, maine naye tab me search results open kar diye hai. Hope you find what you want! 🧐`,
+            `Le bobby, tumhari farmaish par search results हाजिर है! Chuno jo chuno! 😉`
+          ]
+        : (isYt && videoIdToUse
+          ? [
+              `Arre wah! Maine direct YouTube par tumhara video chala diya hai background aur alag tab me. Gana enjoy kijiye! ✨`,
+              `Le bhai, tumhare liye directly playing "${mediaToPlay.query}" song. No matching/search stress! 😉`,
+              `Haaanji! Abhi chala diya tumhara choice, pure music feel! Lisa hamesha dhyan rakhti hai! 😎`
+            ]
+          : [
+              `Arre wah! Maine background me aur alag tab me tumhara ${isYt ? "YouTube video" : "Spotify track"} chala diya hai. Gana enjoy kijiye! ✨`,
+              `Le bhai, tumhare liye ${isYt ? "YouTube" : "Spotify"} par "${mediaToPlay.query}" ek naye tab me chala diya. Aur background me bhi activated hai! 😉`,
+              `Haaanji! Chala diya tumhara "${mediaToPlay.query}" song alag tab me directly. Lisa hamesha active hai! 😎`
+            ]);
       // Pick random sassy response for entertainment
       const responseText = responses[Math.floor(Math.random() * responses.length)];
       setMessages((prev) => [...prev, { id: Date.now().toString() + "-l", sender: "lisa", text: responseText }]);
       
-      if (!isMuted) {
-        setAppState("speaking");
-        const audioBase64 = await getLisaAudio(responseText);
-        if (audioBase64) {
-          await playPCM(audioBase64);
-        }
-      }
-      setAppState("idle");
+      await handleLisaSpeak(responseText);
       return;
     }
 
@@ -440,15 +552,7 @@ export default function App() {
       responseText = commandResult.action;
       setMessages((prev) => [...prev, { id: Date.now().toString() + "-l", sender: "lisa", text: responseText }]);
       
-      if (!isMuted) {
-        setAppState("speaking");
-        const audioBase64 = await getLisaAudio(responseText);
-        if (audioBase64) {
-          await playPCM(audioBase64);
-        }
-      }
-
-      setAppState("idle");
+      await handleLisaSpeak(responseText);
 
       setTimeout(() => {
         if (commandResult.url) {
@@ -456,22 +560,24 @@ export default function App() {
         }
       }, 1500);
     } else {
-      // 2. General Chit-Chat via Gemini (incorporating Voice History and custom memory)
+      // 2. General Chit-Chat via Gemini (incorporating Voice History, custom memory, and camera snapshot if available)
       const voiceContextStr = getVoiceHistoryContextString();
       const customMemoryStr = currentUser ? (localStorage.getItem(`lisa_memory_${currentUser.email}`) || "") : "";
-      responseText = await getLisaResponse(finalTranscript, messagesRef.current, currentUser?.name || "Ashwani", voiceContextStr, customMemoryStr);
+      responseText = await getLisaResponse(
+        finalTranscript, 
+        messagesRef.current, 
+        currentUser?.name || "Ashwani", 
+        voiceContextStr, 
+        customMemoryStr,
+        chatCapturedImage || undefined,
+        chatCapturedImage ? "image/jpeg" : undefined
+      );
       setMessages((prev) => [...prev, { id: Date.now().toString() + "-l", sender: "lisa", text: responseText }]);
+      setChatCapturedImage(null);
       
-      if (!isMuted) {
-        setAppState("speaking");
-        const audioBase64 = await getLisaAudio(responseText);
-        if (audioBase64) {
-          await playPCM(audioBase64);
-        }
-      }
-      setAppState("idle");
+      await handleLisaSpeak(responseText);
     }
-  }, [isMuted, isSessionActive, currentUser, getVoiceHistoryContextString]);
+  }, [isMuted, isSessionActive, currentUser, getVoiceHistoryContextString, chatCapturedImage]);
 
   useEffect(() => {
     return () => {
@@ -498,7 +604,8 @@ export default function App() {
         // Pass voice history context and custom memory to the constructor so Lisa reads it during system instructions
         const voiceContextStr = getVoiceHistoryContextString();
         const customMemoryStr = currentUser ? (localStorage.getItem(`lisa_memory_${currentUser.email}`) || "") : "";
-        const session = new LiveSessionManager(currentUser?.name || "Ashwani", voiceContextStr, customMemoryStr);
+        const preferredVoiceStr = currentUser ? (localStorage.getItem(`lisa_preferred_voice_${currentUser.email}`) || "Kore") : "Kore";
+        const session = new LiveSessionManager(currentUser?.name || "Ashwani", voiceContextStr, customMemoryStr, preferredVoiceStr);
         session.isMuted = isMuted;
         liveSessionRef.current = session;
         
@@ -590,9 +697,10 @@ export default function App() {
 
   const handleTextSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!textInput.trim()) return;
+    if (!textInput.trim() && !chatCapturedImage) return;
     
-    handleTextCommand(textInput);
+    const finalText = textInput.trim() || "(Look at this picture!)";
+    handleTextCommand(finalText);
     setTextInput("");
     setShowTextInput(false);
   };
@@ -661,6 +769,7 @@ export default function App() {
             }, 300);
           }}
           onLogout={() => {
+            stopChatWebcam();
             if (liveSessionRef.current) {
               liveSessionRef.current.stop();
               liveSessionRef.current = null;
@@ -702,15 +811,73 @@ export default function App() {
         />
       )}
 
-      {/* Floating Media Widget */}
+      {/* Floating Eye (Main Screen Camera Stream) */}
       <AnimatePresence>
-        {activeMedia && (
-          <MediaWidget
-            type={activeMedia.type}
-            query={activeMedia.query}
-            palette={activePalette}
-            onClose={() => setActiveMedia(null)}
-          />
+        {isChatWebcamActive && (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.9, y: 30 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.9, y: 30 }}
+            className="fixed right-6 md:right-12 bottom-36 w-[320px] md:w-[360px] bg-black/90 border border-rose-500/40 rounded-3xl p-3.5 z-40 shadow-[0_0_30px_rgba(244,63,94,0.25)] flex flex-col gap-3.5 backdrop-blur-xl transition-all duration-300 pointer-events-auto"
+          >
+            {/* Camera Header */}
+            <div className="flex items-center justify-between border-b border-white/5 pb-2">
+              <div className="flex items-center gap-2">
+                <span className="relative flex h-2 w-2">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-rose-500"></span>
+                </span>
+                <span className="text-[10px] font-mono uppercase tracking-widest text-rose-400 font-bold">LISA VISION: ACTIVE 👁️</span>
+              </div>
+              <button
+                type="button"
+                onClick={stopChatWebcam}
+                className="p-1 rounded-full text-white/40 hover:text-white hover:bg-white/5 transition-colors cursor-pointer"
+              >
+                <X size={14} />
+              </button>
+            </div>
+
+            {/* Video Feed */}
+            <div className="relative aspect-video rounded-2xl bg-black overflow-hidden border border-white/10 group">
+              <video
+                ref={chatWebcamRef}
+                autoPlay
+                playsInline
+                className="w-full h-full object-cover scale-x-[-1]"
+              />
+              {/* Animated scanning bar */}
+              <div className="absolute top-0 left-0 right-0 h-[1.5px] bg-rose-500/30 shadow-[0_0_10px_rgba(244,63,94,0.6)] animate-[bounce_5s_infinite] pointer-events-none" />
+              <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-black/20 pointer-events-none" />
+            </div>
+
+            {/* Camera Controls */}
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  captureChatPhoto();
+                  const dialogues = [
+                    "Waaah, sssuperb capture! Maine snapshot le liya hai. Ab text me likho ya mic se pucho aur main iske upar gyaan dungi! 😉",
+                    "Aha! Snapshot clickable ho gaya hai. Ab aap mujhse is tasveer ke baare me kuch bhi discuss kar sakte hain! 🌸",
+                    "Chalo, scan done! Meri nazrein bohot tej hain. Ab pucho, kya jaanna hai is baare me? ✨"
+                  ];
+                  handleLisaSpeak(dialogues[Math.floor(Math.random() * dialogues.length)]);
+                }}
+                className="flex-1 py-2.5 bg-gradient-to-r from-rose-500 to-pink-600 hover:from-rose-400 hover:to-pink-500 text-white font-semibold rounded-xl text-xs flex items-center justify-center gap-1.5 cursor-pointer shadow-lg active:scale-95 transition-transform"
+              >
+                <Camera size={14} />
+                <span>Snap Photo 📸</span>
+              </button>
+              <button
+                type="button"
+                onClick={stopChatWebcam}
+                className="px-3 py-2.5 bg-white/5 hover:bg-white/10 border border-white/5 hover:border-white/10 text-white text-xs rounded-xl transition-colors cursor-pointer"
+              >
+                Cancel
+              </button>
+            </div>
+          </motion.div>
         )}
       </AnimatePresence>
 
@@ -834,7 +1001,7 @@ export default function App() {
               onClick={() => setIsChatOpen(!isChatOpen)}
               className={`p-2 rounded-full transition-all border cursor-pointer ${
                 isChatOpen 
-                  ? `bg-white/10 text-white ${activePalette.accentBorder}` 
+                  ? `bg-white/15 text-white ${activePalette.accentBorder}` 
                   : "bg-white/5 text-white/70 hover:bg-white/10 border-white/10"
               }`}
               title={isChatOpen ? "Hide Chat Conversation" : "Show Chat Conversation"}
@@ -907,6 +1074,37 @@ export default function App() {
       {/* Controls */}
       <footer className="absolute bottom-0 left-0 w-full flex flex-col items-center justify-center pb-6 md:pb-8 z-20 shrink-0 gap-4">
         <AnimatePresence>
+          {chatCapturedImage && (
+            <motion.div
+              initial={{ opacity: 0, y: 15, scale: 0.9 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 15, scale: 0.9 }}
+              className="p-2 bg-[#0b0c10]/95 border border-emerald-500/35 rounded-2xl shadow-[0_0_20px_rgba(16,185,129,0.2)] flex items-center gap-3 backdrop-blur-xl pointer-events-auto max-w-xs relative z-40 mb-1"
+            >
+              <div className="w-12 h-12 rounded-xl overflow-hidden border border-white/10 bg-black shrink-0 relative">
+                <img
+                  src={chatCapturedImage}
+                  alt="Captured Snap"
+                  className="w-full h-full object-cover"
+                />
+              </div>
+              <div className="flex flex-col gap-0.5 justify-center mr-1">
+                <span className="text-[9px] font-mono text-[#10b981] uppercase tracking-wider font-semibold">LISA CAPTURED EYE ✨</span>
+                <span className="text-[10px] text-white/50 leading-none">Press Mic or Type to ask!</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setChatCapturedImage(null)}
+                className="p-1.5 rounded-full bg-white/5 hover:bg-rose-500/20 text-white/50 hover:text-rose-400 border border-white/5 transition-colors cursor-pointer"
+                title="Remove image"
+              >
+                <X size={10} />
+              </button>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        <AnimatePresence>
           {showTextInput && (
             <motion.form 
               initial={{ opacity: 0, y: 20 }}
@@ -925,7 +1123,7 @@ export default function App() {
               />
               <button 
                 type="submit"
-                disabled={!textInput.trim()}
+                disabled={!textInput.trim() && !chatCapturedImage}
                 className={`p-2 rounded-full ${activePalette.accentBg} text-white disabled:opacity-50 transition-colors`}
               >
                 <Send size={16} />
@@ -942,6 +1140,26 @@ export default function App() {
           >
             <FileText size={20} />
           </button>
+
+          {currentUser && (
+            <button
+              onClick={() => {
+                if (isChatWebcamActive) {
+                  stopChatWebcam();
+                } else {
+                  startChatWebcam();
+                }
+              }}
+              className={`p-4 rounded-full transition-all border cursor-pointer ${
+                isChatWebcamActive 
+                  ? "bg-rose-500/25 border-rose-400 text-rose-300 shadow-[0_0_15px_rgba(244,63,94,0.3)]" 
+                  : `bg-white/5 border ${activePalette.glassBorder} text-white/70 hover:bg-white/10`
+              }`}
+              title="Toggle Floating Camera Lens (Vision) 👁️"
+            >
+              <Camera size={20} className={isChatWebcamActive ? "animate-pulse" : ""} />
+            </button>
+          )}
           
           {!isSessionActive && (
             <button
@@ -1154,6 +1372,27 @@ export default function App() {
 
             {/* Quick Chat Input at bottom of drawer */}
             <form onSubmit={handleTextSubmit} className={`p-3 border-t ${activePalette.sidebarBorder} bg-white/[0.01] flex items-center gap-2 shrink-0`}>
+              {activeTab === "chat" && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (isChatWebcamActive) {
+                      stopChatWebcam();
+                    } else {
+                      startChatWebcam();
+                    }
+                  }}
+                  className={`p-2 rounded-xl border cursor-pointer transition-all flex items-center justify-center shrink-0 ${
+                    isChatWebcamActive 
+                      ? "bg-rose-500/15 border-rose-500 text-rose-400 animate-pulse" 
+                      : "bg-white/[0.03] border-white/5 text-white/50 hover:text-white"
+                  }`}
+                  title="Toggle Camera"
+                >
+                  <Camera size={12} />
+                </button>
+              )}
+
               <input
                 type="text"
                 value={textInput}
@@ -1163,7 +1402,7 @@ export default function App() {
               />
               <button
                 type="submit"
-                disabled={!textInput.trim()}
+                disabled={!textInput.trim() && !chatCapturedImage}
                 className={`p-2 rounded-xl ${activePalette.accentBg} text-white disabled:opacity-40 transition-colors pointer-events-auto cursor-pointer flex items-center justify-center shrink-0`}
               >
                 <Send size={12} />

@@ -131,9 +131,10 @@ export default function ProfileModal({
     });
   };
 
-  // State: Appearance (Rule pattern and Ink styles)
+  // State: Appearance (Rule pattern, Ink styles, and Voice)
   const [selectedInk, setSelectedInk] = useState("blue");
   const [selectedRule, setSelectedRule] = useState("ruled");
+  const [preferredVoice, setPreferredVoice] = useState("Kore");
   const [appearanceSuccess, setAppearanceSuccess] = useState(false);
 
   // Load database accounts & user properties on mount
@@ -169,8 +170,10 @@ export default function ProfileModal({
     // 4. Load study note preferences
     const ink = localStorage.getItem(`lisa_ink_color_${currentUser.email}`) || "blue";
     const rule = localStorage.getItem(`lisa_notebook_rule_${currentUser.email}`) || "ruled";
+    const voice = localStorage.getItem(`lisa_preferred_voice_${currentUser.email}`) || "Kore";
     setSelectedInk(ink);
     setSelectedRule(rule);
+    setPreferredVoice(voice);
 
     // 5. Calculate storage sizes
     updateStorageMetrics();
@@ -481,6 +484,7 @@ export default function ProfileModal({
   const handleSaveAppearance = () => {
     localStorage.setItem(`lisa_ink_color_${currentUser.email}`, selectedInk);
     localStorage.setItem(`lisa_notebook_rule_${currentUser.email}`, selectedRule);
+    localStorage.setItem(`lisa_preferred_voice_${currentUser.email}`, preferredVoice);
     setAppearanceSuccess(true);
     setTimeout(() => setAppearanceSuccess(false), 2000);
   };
@@ -1491,6 +1495,26 @@ export default function ProfileModal({
                         <option value="blue" className="bg-[#0e0f14] text-white">Classic Reynolds Royal Blue (Likho)</option>
                         <option value="black" className="bg-[#0e0f14] text-white">Midnight Charcoal Black (Proofer Gel)</option>
                         <option value="red" className="bg-[#0e0f14] text-white">Teacher Red Citation Ink (Danger Red)</option>
+                      </select>
+                    </div>
+
+                    <div className="flex flex-col gap-1.5 sm:col-span-2">
+                      <label className="text-[10px] font-mono tracking-widest text-white/60 uppercase">
+                        Lisa AI Preferred Vocal Voice (Aawaj)
+                      </label>
+                      <select
+                        value={preferredVoice}
+                        onChange={(e) => {
+                          setPreferredVoice(e.target.value);
+                          setAppearanceSuccess(false);
+                        }}
+                        className={`w-full bg-white/[0.03] border border-white/10 focus:border-violet-500 rounded-xl p-2.5 text-xs text-white/90 outline-none transition-all cursor-pointer`}
+                      >
+                        <option value="Aoede" className="bg-[#0e0f14] text-white">Aoede 🎙️ [Purani voice - Energetic, Expressive & Bright]</option>
+                        <option value="Kore" className="bg-[#0e0f14] text-white">Kore 🌸 [Classic Female voice - Soft, Calm & Warm]</option>
+                        <option value="Puck" className="bg-[#0e0f14] text-white">Puck ⚡ [Male voice - Upbeat & Active]</option>
+                        <option value="Charon" className="bg-[#0e0f14] text-white">Charon 📞 [Male voice - Deep & Clear]</option>
+                        <option value="Fenrir" className="bg-[#0e0f14] text-white">Fenrir 🌊 [Male voice - Deep & Dark]</option>
                       </select>
                     </div>
                   </div>

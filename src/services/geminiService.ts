@@ -9,7 +9,9 @@ export async function getLisaResponse(
   history: { sender: "user" | "lisa", text: string }[] = [],
   userName: string = "user",
   voiceHistoryContext: string = "",
-  customMemory: string = ""
+  customMemory: string = "",
+  image?: string,
+  mimeType?: string
 ): Promise<string> {
   try {
     const res = await fetch("/api/gemini/chat", {
@@ -22,7 +24,9 @@ export async function getLisaResponse(
         history,
         userName,
         voiceHistoryContext,
-        customMemory
+        customMemory,
+        image,
+        mimeType
       })
     });
     const data = await res.json();
@@ -36,14 +40,14 @@ export async function getLisaResponse(
   }
 }
 
-export async function getLisaAudio(text: string): Promise<string | null> {
+export async function getLisaAudio(text: string, voice: string = "Kore"): Promise<string | null> {
   try {
     const res = await fetch("/api/gemini/tts", {
       method: "POST",
       headers: {
         "Content-Type": "application/json"
       },
-      body: JSON.stringify({ text })
+      body: JSON.stringify({ text, voice })
     });
     const data = await res.json();
     if (data.error) {

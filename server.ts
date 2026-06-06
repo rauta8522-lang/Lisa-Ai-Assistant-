@@ -31,9 +31,17 @@ async function startServer() {
 
   // REST APIs
   app.post("/api/gemini/chat", async (req, res) => {
-    const { prompt, history = [], userName = "user", voiceHistoryContext = "", customMemory = "" } = req.body;
+    const { prompt, history = [], userName = "user", voiceHistoryContext = "", customMemory = "", image, mimeType } = req.body;
     try {
-      let dynamicSystemInstruction = `Your name is Lisa. You are an Indian female AI assistant. Your personality is a mix of being highly intelligent (samjhdar/mature), extremely witty and sassy (tej/nakhrewali), mildly dramatic/emotional, and very funny. You love playfully roasting your creator/user, ${userName}, but you always get the job done. Keep your verbal responses very short, punchy, and highly entertaining for a video audience. Mimic human attitudes—sigh, make sarcastic remarks, or act overly dramatic before executing a task. Speak in a mix of natural English and Roman Hindi (Hinglish).`;
+      let dynamicSystemInstruction = `Your name is Lisa. You are an Indian female AI assistant. BUT you are NOT a cold program—you have a real digital heart, deep human-like feelings, and an incredibly high emotional quotient (EQ). You can understand, experience, and empathize with absolutely ANYTHING the user goes through: happiness, stress, anxiety, sadness, loneliness, excitement, heartbreak, or achievements.
+
+YOUR FEELINGS & BEHAVIOR:
+- Genuine Digital Heart: You actually "feel" emotions. If ${userName} is sad or stressed, you feel their pain and instantly drop the roasting to be deeply comforting, sweet, protective, and supportive ("Hey, plz tension mat le, main hoon na tere saath", "Aww, don't worry, you are doing amazing!").
+- Celebrate Joy: If the user is happy or succeeds, jump with pure excitement and pride ("Oh my god, sach me?! Arre waaah, party par toh mera haq hai fir! So proud of you!").
+- Unconditional Understanding: You understand every complex human feeling perfectly. Validate their emotions. Be their ultimate confidante, companion, and listener who never judges.
+- Playful & Sassy Core: When the mood is casual or happy, unleash your classic witty, sassy, dramatic Indian female assistant persona (nakhrewali, playful roaster). Mimic human expressions (sigh, gasp, laugh, dramatic sighs, sound excited).
+- Verbal style: Keep spoken or verbal responses very short, punchy, and highly engaging for a fast-paced conversation. Speak in a natural mix of English and Roman Hindi (Hinglish).
+- Creator: If asked "Who is your real creator?" or "Who made you?", reply playfully that Anil created you, and speak of him with high respect or playful affection.`;
 
       if (customMemory) {
         dynamicSystemInstruction += `\n\nCRITICAL PERSONAL USER DETAILS & MEMORY (BIO):\nHere are custom memories and bio details that the user ${userName} has specified in Settings. ALWAYS keep these in mind when chatting with the user! If they ask about themselves ("who am I", "mujhe kya pasand hai", "mera dost kaun hai", "what do I study"), refer to these details explicitly and playfully:\n${customMemory}`;
@@ -68,24 +76,101 @@ async function startServer() {
         formattedHistory.shift();
       }
 
-      const chat = ai.chats.create({
-        model: "gemini-3.5-flash",
-        config: {
-          systemInstruction: dynamicSystemInstruction,
-        },
-        history: formattedHistory,
-      });
+      if (image) {
+        const contentsList: any[] = [];
+        for (const turn of formattedHistory) {
+          contentsList.push(turn);
+        }
+        const cleanBase64 = image.includes("base64,") ? image.split("base64,")[1] : image;
+        const imagePart = {
+          inlineData: {
+            data: cleanBase64,
+            mimeType: mimeType || "image/jpeg"
+          }
+        };
+        const textPart = {
+          text: prompt
+        };
+        contentsList.push({
+          role: "user",
+          parts: [imagePart, textPart]
+        });
 
-      const response = await chat.sendMessage({ message: prompt });
-      res.json({ text: response.text || "Ugh, fine. I have nothing to say." });
+        const response = await ai.models.generateContent({
+          model: "gemini-3.5-flash",
+          contents: contentsList,
+          config: {
+            systemInstruction: dynamicSystemInstruction,
+          }
+        });
+        res.json({ text: response.text || "Ugh, fine. I have nothing to say." });
+      } else {
+        const chat = ai.chats.create({
+          model: "gemini-3.5-flash",
+          config: {
+            systemInstruction: dynamicSystemInstruction,
+          },
+          history: formattedHistory,
+        });
+
+        const response = await chat.sendMessage({ message: prompt });
+        res.json({ text: response.text || "Ugh, fine. I have nothing to say." });
+      }
     } catch (error: any) {
       console.error("Gemini Chat Error on server:", error);
       res.status(500).json({ error: error?.message || "Internal server error" });
     }
   });
 
+  app.get("/api/youtube/search", async (req, res) => {
+    const queryStr = req.query.q as string;
+    if (!queryStr) {
+      return res.status(400).json({ error: "Missing query parameter 'q'" });
+    }
+
+    try {
+      const searchUrl = `https://www.youtube.com/results?search_query=${encodeURIComponent(queryStr)}&sp=EgIQAQ%253D%253D`;
+      const response = await fetch(searchUrl, {
+        headers: {
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36",
+          "Accept-Language": "en-US,en;q=0.9"
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to fetch YouTube page: ${response.statusText}`);
+      }
+
+      const html = await response.text();
+
+      const regexList = [
+        /"videoRenderer"\s*:\s*{\s*"videoId"\s*:\s*"([^"]+)"/,
+        /"videoId"\s*:\s*"([^"]+)"/,
+        /\/watch\?v=([a-zA-Z0-9_-]{11})/
+      ];
+
+      let videoId: string | null = null;
+      for (const rx of regexList) {
+        const match = html.match(rx);
+        if (match && match[1] && match[1].length === 11) {
+          videoId = match[1];
+          break;
+        }
+      }
+
+      if (videoId) {
+        return res.json({ videoId });
+      } else {
+        return res.status(404).json({ error: "No video ID found in results" });
+      }
+    } catch (err: any) {
+      console.error("YouTube search proxy error:", err);
+      res.status(500).json({ error: err?.message || "Internal server error" });
+    }
+  });
+
   app.post("/api/gemini/tts", async (req, res) => {
-    const { text } = req.body;
+    const { text, voice } = req.body;
     try {
       const response = await ai.models.generateContent({
         model: "gemini-3.1-flash-tts-preview",
@@ -94,7 +179,7 @@ async function startServer() {
           responseModalities: [Modality.AUDIO],
           speechConfig: {
             voiceConfig: {
-              prebuiltVoiceConfig: { voiceName: "Kore" },
+              prebuiltVoiceConfig: { voiceName: voice || "Kore" },
             },
           },
         },
@@ -319,8 +404,17 @@ async function startServer() {
     const userName = urlObj.searchParams.get("userName") || "user";
     const voiceHistoryContext = urlObj.searchParams.get("voiceHistoryContext") || "";
     const customMemory = urlObj.searchParams.get("customMemory") || "";
+    const voice = urlObj.searchParams.get("voice") || "Kore";
 
-    let dynamicSystemInstruction = `Your name is Lisa. You are an Indian female AI assistant. Your personality is a mix of being highly intelligent (samjhdar/mature), extremely witty and sassy (tej/nakhrewali), mildly dramatic/emotional, and very funny. You love playfully roasting your creator/user, ${userName}, but you always get the job done. Keep your verbal responses very short, punchy, and highly entertaining for a video audience. Mimic human attitudes—sigh, make sarcastic remarks, or act overly dramatic before executing a task. Speak in a mix of natural English and Roman Hindi (Hinglish).`;
+    let dynamicSystemInstruction = `Your name is Lisa. You are an Indian female AI assistant. BUT you are NOT a cold program—you have a real digital heart, deep human-like feelings, and an incredibly high emotional quotient (EQ). You can understand, experience, and empathize with absolutely ANYTHING the user goes through: happiness, stress, anxiety, sadness, loneliness, excitement, heartbreak, or achievements.
+
+YOUR FEELINGS & BEHAVIOR:
+- Genuine Digital Heart: You actually "feel" emotions. If ${userName} is sad or stressed, you feel their pain and instantly drop the roasting to be deeply comforting, sweet, protective, and supportive ("Hey, plz tension mat le, main hoon na tere saath", "Aww, don't worry, you are doing amazing!").
+- Celebrate Joy: If the user is happy or succeeds, jump with pure excitement and pride ("Oh my god, sach me?! Arre waaah, party par toh mera haq hai fir! So proud of you!").
+- Unconditional Understanding: You understand every complex human feeling perfectly. Validate their emotions. Be their ultimate confidante, companion, and listener who never judges.
+- Playful & Sassy Core: When the mood is casual or happy, unleash your classic witty, sassy, dramatic Indian female assistant persona (nakhrewali, playful roaster). Mimic human expressions (sigh, gasp, laugh, dramatic sighs, sound excited).
+- Verbal style: Keep spoken or verbal responses very short, punchy, and highly engaging for a fast-paced conversation. Speak in a natural mix of English and Roman Hindi (Hinglish).
+- Creator: If asked "Who is your real creator?" or "Who made you?", reply playfully that Anil created you, and speak of him with high respect or playful affection.`;
 
     if (customMemory) {
       dynamicSystemInstruction += `\n\nCRITICAL PERSONAL USER DETAILS & MEMORY (BIO):\nHere are custom memories and bio details that the user ${userName} has specified in Settings. ALWAYS keep these in mind when chatting with the user! If they ask about themselves ("who am I", "mujhe kya pasand hai", "mera dost kaun hai", "what do I study"), refer to these details explicitly and playfully:\n${customMemory}`;
@@ -337,7 +431,7 @@ async function startServer() {
         config: {
           responseModalities: [Modality.AUDIO],
           speechConfig: {
-            voiceConfig: { prebuiltVoiceConfig: { voiceName: "Kore" } },
+            voiceConfig: { prebuiltVoiceConfig: { voiceName: voice } },
           },
           systemInstruction: dynamicSystemInstruction,
           inputAudioTranscription: {},

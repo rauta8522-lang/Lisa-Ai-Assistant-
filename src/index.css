@@ -1,7 +1,7 @@
 @import url('https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&family=Share+Tech+Mono&family=Kalam:wght@300;400;700&family=Caveat:wght@400;700&display=swap');
 @import "tailwindcss";
 
-@theme {
+:root {
   --font-sans: "Rajdhani", ui-sans-serif, system-ui, sans-serif;
   --font-mono: "Share Tech Mono", ui-monospace, SFMono-Regular, monospace;
   --font-handwritten: "Kalam", "Caveat", cursive;
