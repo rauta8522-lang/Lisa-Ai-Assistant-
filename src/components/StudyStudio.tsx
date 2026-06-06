@@ -537,6 +537,19 @@ export default function StudyStudio({ isOpen, onClose, palette, userName }: Stud
     }
   };
 
+  const removeNestedArrays = (obj: any): any => {
+  if (Array.isArray(obj)) {
+    return obj.flat(Infinity);
+  } else if (typeof obj === "object" && obj !== null) {
+    const newObj: any = {};
+    for (const key in obj) {
+      newObj[key] = removeNestedArrays(obj[key]);
+    }
+    return newObj;
+  }
+  return obj;
+};
+
   const saveNoteToFirestore = async () => {
   const user = auth.currentUser;
 
@@ -547,6 +560,10 @@ export default function StudyStudio({ isOpen, onClose, palette, userName }: Stud
 
   try {
     console.log("Saving note:", generatedNote);
+    const cleanData = removeNestedArrays(generatedNote);
+    if (process.env.NODE_ENV === "development") {
+  console.log("Clean data:", cleanData);
+  }
 
     const notesCollection = collection(
       db,
@@ -556,7 +573,7 @@ export default function StudyStudio({ isOpen, onClose, palette, userName }: Stud
     );
 
     await addDoc(notesCollection, {
-      ...generatedNote,
+      ...cleanData,
       createdAt: Date.now()
     });
 
