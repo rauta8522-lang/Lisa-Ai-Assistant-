@@ -374,7 +374,11 @@ YOUR FEELINGS & BEHAVIOR:
 
 app.use(express.static(distPath));
 
+// ❗ API routes ko skip karo
 app.get("*", (req, res) => {
+  if (req.path.startsWith("/api") || req.path.startsWith("/live")) {
+    return res.status(404).end();
+  }
   res.sendFile(path.join(distPath, "index.html"));
 });
 
