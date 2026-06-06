@@ -142,7 +142,6 @@ function detectAndPlayMedia(text: string): { type: "youtube" | "spotify"; query:
 }
 
 export default function App() {
-  console.log("NEW APP VERSION LOADED 2026");
   const [appState, setAppState] = useState<AppState>("idle");
   const [currentUser, setCurrentUser] = useState<{ email: string; name: string } | null>(null);
 
