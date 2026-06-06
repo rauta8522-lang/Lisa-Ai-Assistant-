@@ -1,12 +1,14 @@
-# Build stage
+# =========================
+# 1. Build stage
+# =========================
 FROM node:20-alpine AS builder
 
 WORKDIR /app
 
 COPY package*.json ./
-RUN npm install --legacy-peer-deps
+RUN npm install
 
-# 1. Pehle Render se aane wale arguments define karega
+# Build args
 ARG GEMINI_API_KEY
 ARG VITE_FIREBASE_API_KEY
 ARG VITE_FIREBASE_AUTH_DOMAIN
@@ -20,7 +22,7 @@ ARG TWILIO_ACCOUNT_SID
 ARG TWILIO_AUTH_TOKEN
 ARG TWILIO_WHATSAPP_NUMBER
 
-# 2. Unhe environment variables mein convert karega
+# Env
 ENV GEMINI_API_KEY=$GEMINI_API_KEY
 ENV VITE_FIREBASE_API_KEY=$VITE_FIREBASE_API_KEY
 ENV VITE_FIREBASE_AUTH_DOMAIN=$VITE_FIREBASE_AUTH_DOMAIN
@@ -35,25 +37,25 @@ ENV TWILIO_AUTH_TOKEN=$TWILIO_AUTH_TOKEN
 ENV TWILIO_WHATSAPP_NUMBER=$TWILIO_WHATSAPP_NUMBER
 
 COPY . .
+
 RUN npm run build
 
-# Production stage
+
+# =========================
+# 2. Production stage
+# =========================
 FROM node:20-alpine
 
 WORKDIR /app
 
-# Install a simple HTTP server to serve the built app
-RUN npm install -g serve
+# Copy everything from builder (IMPORTANT)
+COPY --from=builder /app /app
 
-COPY --from=builder /app/dist ./dist
-COPY --from=builder /app/public ./public
+# Install only production deps
+RUN npm install --omit=dev
 
 # Expose port
 EXPOSE 3000
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
-  CMD wget --no-verbose --tries=1 --spider http://localhost:3000/ || exit 1
-
-# Start the application
-CMD ["serve", "-s", "dist", "-l", "3000"]
+# Start backend server
+CMD ["node", "dist/server.cjs"]
