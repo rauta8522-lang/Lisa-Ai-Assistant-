@@ -945,14 +945,28 @@ export default function StudyStudio({ isOpen, onClose, palette, userName }: Stud
 
           {/* LEFT SIDE PANEL: Controls, Inputs, File Uploader */}
           <div className="w-full md:w-[32%] border-r border-white/10 flex flex-col h-full bg-[#0a0d14]/70 p-4 overflow-y-auto shrink-0 scrollbar-hide">
-            <div className="flex items-center gap-3 mb-4">
-              <div className={`w-8 h-8 rounded-xl bg-gradient-to-tr ${palette.avatarBg} flex items-center justify-center text-white`}>
-                <BookOpen size={16} />
+            <div className="flex items-center justify-between w-full mb-4">
+              <div className="flex items-center gap-3">
+                <div className={`w-8 h-8 rounded-xl bg-gradient-to-tr ${palette.avatarBg} flex items-center justify-center text-white`}>
+                  <BookOpen size={16} />
+                </div>
+                <div>
+                  <h2 className="text-base font-serif font-semibold text-white tracking-wide">Lisa Study Studio</h2>
+                  <p className="text-[10px] font-mono text-white/40 uppercase tracking-widest">Handwritten Exam Notes</p>
+                </div>
               </div>
-              <div>
-                <h2 className="text-base font-serif font-semibold text-white tracking-wide">Lisa Study Studio</h2>
-                <p className="text-[10px] font-mono text-white/40 uppercase tracking-widest">Handwritten Exam Notes</p>
-              </div>
+
+              {/* Mobile Only Cross Button (Jo sirf 3.jpeg mobile view me top right par dikhega) */}
+              <button 
+                onClick={() => {
+                  // TODO: Agar aapke modal/window ko band karne ke liye koi aur function hai,
+                  // jaise onClose() ya setIsOpen(false), toh use yahan replace kar dena.
+                  if (typeof onClose === 'function') onClose();
+                }}
+                className="md:hidden p-2 rounded-full bg-white/5 text-white/60 hover:bg-white/10 hover:text-white transition-colors cursor-pointer"
+              >
+                <X size={16} />
+              </button>
             </div>
 
             {/* Mode Switcher */}
