@@ -376,7 +376,20 @@ YOUR FEELINGS & BEHAVIOR:
   // Serve static assets in development & production
   const distPath = path.join(process.cwd(), "dist");
 
-app.use(express.static(distPath));
+app.use(
+  express.static(distPath, {
+    etag: false,
+    lastModified: false,
+    setHeaders: (res) => {
+      res.setHeader(
+        "Cache-Control",
+        "no-store, no-cache, must-revalidate, proxy-revalidate"
+      );
+      res.setHeader("Pragma", "no-cache");
+      res.setHeader("Expires", "0");
+    },
+  })
+);
 
 // ❗ API routes ko skip karo
 app.get("*", (req, res) => {

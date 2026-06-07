@@ -19,6 +19,7 @@ import { auth, db } from "./config/firebase";
 import { onAuthStateChanged } from "firebase/auth";
 import { collection, doc, query, getDocs, addDoc, updateDoc, setDoc } from "firebase/firestore";
 
+const APP_VERSION = "2.0.2";
 type AppState = "idle" | "listening" | "processing" | "speaking";
 
 interface ChatMessage {
@@ -155,6 +156,23 @@ export default function App() {
     });
     return unsubscribe;
   }, []);
+
+  useEffect(() => {
+  const savedVersion = localStorage.getItem("app_version");
+
+  if (savedVersion !== APP_VERSION) {
+
+    localStorage.clear();
+
+    caches.keys().then((names) => {
+      names.forEach((name) => caches.delete(name));
+    });
+
+    localStorage.setItem("app_version", APP_VERSION);
+
+    window.location.reload();
+  }
+}, []);
 
   const [isAppUnlocked, setIsAppUnlocked] = useState<boolean>(() => {
     const active = localStorage.getItem("lisa_active_user");
