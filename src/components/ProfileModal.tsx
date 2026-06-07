@@ -516,7 +516,7 @@ export default function ProfileModal({
         initial={{ opacity: 0, scale: 0.95, y: 20 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
         exit={{ opacity: 0, scale: 0.95, y: 20 }}
-        className={`w-full max-w-3xl bg-[#0b0c10]/95 border ${palette.glassBorder} rounded-[2rem] shadow-2xl relative overflow-hidden flex flex-col md:flex-row transition-all duration-300 min-h-[460px]`}
+        className={`w-full max-w-3xl bg-[#0b0c10]/95 border ${palette.glassBorder} rounded-2xl md:rounded-[2rem] shadow-2xl relative overflow-hidden flex flex-col md:flex-row transition-all duration-300 max-h-[90vh] md:max-h-none`}
       >
         {/* Colorful top border ribbon */}
         <div className={`absolute top-0 left-0 w-full h-1 bg-gradient-to-r ${palette.accentGradient}`} />
@@ -557,7 +557,7 @@ export default function ProfileModal({
               </div>
             </div>
 
-            <nav className="flex flex-col gap-1">
+            <nav className="grid grid-cols-2 gap-1.5 md:flex md:flex-col md:gap-1">
               <button
                 onClick={() => setActiveTab("personal")}
                 className={`flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-xs font-medium transition-all text-left cursor-pointer ${
@@ -676,7 +676,7 @@ export default function ProfileModal({
         </div>
 
         {/* Right Side: Tab Panel Contents */}
-        <div className="flex-1 p-6 md:p-8 flex flex-col justify-between overflow-y-auto max-h-[500px]">
+       <div className="flex-1 p-5 md:p-8 flex flex-col justify-between overflow-y-auto max-h-[calc(100vh-160px)] md:max-h-[500px]">
           <AnimatePresence mode="wait">
             {/* 1. PERSONAL DETAILS TAB */}
             {activeTab === "personal" && (
