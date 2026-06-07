@@ -13,7 +13,7 @@ const DEFAULT_CONTACTS: WhatsAppContact[] = [
   { id: "seed-1", name: "Soni", phone: "+919876543210" },
   { id: "seed-2", name: "Papa", phone: "" },
   { id: "seed-3", name: "Mummy", phone: "" },
-  { id: "seed-4", name: "Ashwani", phone: "" },
+  { id: "seed-4", name: "", phone: "" },
 ];
 
 /**

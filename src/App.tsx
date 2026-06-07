@@ -617,7 +617,7 @@ export default function App() {
       responseText = await getLisaResponse(
         finalTranscript, 
         messagesRef.current, 
-        currentUser?.name || "Ashwani", 
+        currentUser?.name || "", 
         voiceContextStr, 
         customMemoryStr,
         chatCapturedImage || undefined,
@@ -656,7 +656,7 @@ export default function App() {
         const voiceContextStr = getVoiceHistoryContextString();
         const customMemoryStr = currentUser ? (localStorage.getItem(`lisa_memory_${currentUser.email}`) || "") : "";
         const preferredVoiceStr = currentUser ? (localStorage.getItem(`lisa_preferred_voice_${currentUser.email}`) || "Kore") : "Kore";
-        const session = new LiveSessionManager(currentUser?.name || "Ashwani", voiceContextStr, customMemoryStr, preferredVoiceStr);
+        const session = new LiveSessionManager(currentUser?.name || "", voiceContextStr, customMemoryStr, preferredVoiceStr);
         session.isMuted = isMuted;
         liveSessionRef.current = session;
         

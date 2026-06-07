@@ -76,7 +76,7 @@ export default function ProfileModal({
   const [allFeedback, setAllFeedback] = useState<any[]>([]);
 
   useEffect(() => {
-    if (activeTab === 'feedback' && currentUser.email === "anilraut897@gmail.com") {
+    if (activeTab === 'feedback' && currentUser.email === "rauta8522@gmail.com") {
         const fetchFeedback = async () => {
             const q = query(collection(db, "feedbacks"));
             const snapshot = await getDocs(q);
@@ -530,7 +530,7 @@ export default function ProfileModal({
         </button>
 
         {/* Left Side: Modular Navigation Panel */}
-        <div className="w-full md:w-64 border-b md:border-b-0 md:border-r border-white/10 p-6 flex flex-col justify-between shrink-0 bg-white/[0.01]">
+        <div className="w-full md:w-64 border-b md:border-b-0 md:border-r border-white/10 p-5 md:p-6 flex flex-col justify-between shrink-0 bg-white/[0.01]">
           <div>
             <div className="flex items-center gap-3 mb-6">
               <div className="relative group/avatar">
@@ -589,7 +589,7 @@ export default function ProfileModal({
                 onClick={() => setActiveTab("whatsapp")}
                 className={`flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-xs font-medium transition-all text-left cursor-pointer ${
                   activeTab === "whatsapp"
-                    ? `bg-white/10 text-white font-semibold border-l-2 border-[#10b981]`
+                    ? `bg-white/10 text-white font-semibold border-l-2 border-l-[#10b981]`
                     : "text-white/60 hover:bg-white/5 hover:text-white"
                 }`}
               >
@@ -659,15 +659,23 @@ export default function ProfileModal({
                 <MessageSquare size={14} className={activeTab === "feedback" ? palette.accentText : "opacity-60"} />
                 <span>Feedback</span>
               </button>
+
+              {/* Mobile Only Logout Button (Grid me seamlessly fit ho jayega) */}
+              <button 
+                onClick={onLogout} 
+                className="col-span-2 md:hidden flex items-center justify-center gap-2 px-3 py-2.5 mt-2 text-xs font-semibold text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl active:bg-red-500/20 transition-all cursor-pointer"
+              >
+                <LogOut size={14} />
+                <span>Sign Out & Clear</span>
+              </button>
             </nav>
           </div>
 
-          <div className="pt-6 border-t border-white/5 mt-6 hidden md:block">
-            <button
-              onClick={() => setActiveTab("logout")}
-              className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-xs font-medium transition-all text-left text-red-400 hover:bg-red-500/10 cursor-pointer ${
-                activeTab === "logout" ? "bg-red-500/10 text-red-300 font-semibold" : ""
-              }`}
+          {/* Laptop Only Logout Button (Niche layout me float karega) */}
+          <div className="hidden md:block pt-4 border-t border-white/10 mt-4">
+            <button 
+              onClick={onLogout} 
+              className="w-full flex items-center gap-2 px-3 py-2 text-xs font-medium text-red-400 hover:bg-red-500/10 rounded-xl transition-colors cursor-pointer"
             >
               <LogOut size={14} />
               <span>Sign Out & Clear</span>
@@ -980,7 +988,7 @@ export default function ProfileModal({
                     <span>WhatsApp Shortcut Directory</span>
                   </h3>
                   <p className="text-xs text-white/50 leading-relaxed font-sans">
-                    Assign screen names (like Soni, Papa, Mummy, Amit) to real phone numbers (with country code, e.g. +91) so Lisa can deep-link instantly across Android, iOS, Windows, Mac, and Linux.
+                    Assign screen names (like Brother,Papa, Mummy, Amit) to real phone numbers (with country code, e.g. +91) so Lisa can deep-link instantly across Android, iOS, Windows, Mac, and Linux.
                   </p>
                   <button
                     onClick={() => {
@@ -1033,12 +1041,12 @@ export default function ProfileModal({
                   </h4>
                   <div className="flex flex-col sm:flex-row gap-3">
                     <div className="flex-1 space-y-1">
-                      <label className="text-[9px] font-mono text-white/40 uppercase">Name (e.g. Soni)</label>
+                      <label className="text-[9px] font-mono text-white/40 uppercase">Name (e.g. Brother)</label>
                       <input 
                         type="text"
                         value={newWaName}
                         onChange={(e) => setNewWaName(e.target.value)}
-                        placeholder="e.g. Soni"
+                        placeholder="e.g. Brother"
                         className="w-full bg-[#0b0c10] border border-white/10 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-[#10b981] transition-all"
                       />
                     </div>
@@ -1048,7 +1056,7 @@ export default function ProfileModal({
                         type="text"
                         value={newWaPhone}
                         onChange={(e) => setNewWaPhone(e.target.value)}
-                        placeholder="e.g. +919876543210"
+                        placeholder="e.g. +910000000000"
                         className="w-full bg-[#0b0c10] border border-white/10 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-[#10b981] transition-all"
                       />
                     </div>
@@ -1127,7 +1135,7 @@ export default function ProfileModal({
 
                 <div className="pt-2 flex justify-between items-center bg-[#10b981]/10 border border-[#10b981]/10 p-3.5 rounded-2xl text-[10.5px] text-emerald-100/90 leading-relaxed text-left">
                   <span>
-                    💡 <b>Device Compatibility Shield:</b> Soni ko ya kisi ko WhatsApp par message bhejne ke liye bolenge, toh Lisa contact list scan karegi. Paaye jaane par background me direct tab chala degi.
+                    💡 <b>Device Compatibility Shield:</b> Brother ko ya kisi ko WhatsApp par message bhejne ke liye bolenge, toh Lisa contact list scan karegi. Paaye jaane par background me direct tab chala degi.
                   </span>
                 </div>
               </motion.div>
