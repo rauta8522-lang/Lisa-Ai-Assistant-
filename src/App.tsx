@@ -158,21 +158,54 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-  const savedVersion = localStorage.getItem("app_version");
+    const autoBypassOldCache = async () => {
+      try {
+        // 1. सर्वर से ताज़ा version.json फ़ाइल मँगाएँ (बिना कैशे के)
+        const res = await fetch("/version.json?t=" + Date.now(), {
+          cache: "no-store",
+        });
+        const data = await res.json();
+        
+        // लोकल स्टोरेज में सेव पुराना वर्जन देखें
+        const currentVersion = localStorage.getItem("lisa_pwa_version");
 
-  if (savedVersion !== APP_VERSION) {
+        // 2. अगर सर्वर का वर्जन लोकल वर्जन से अलग है
+        if (currentVersion && data.version !== currentVersion) {
+          console.log("New version detected! Wiping old browser cache...");
 
-    localStorage.clear();
+          // 3. लोकल स्टोरेज और ब्राउज़र कैशे को पूरी तरह खाली करें
+          localStorage.clear();
+          if ("caches" in window) {
+            const cacheNames = await caches.keys();
+            await Promise.all(
+              cacheNames.map((cacheName) => caches.delete(cacheName))
+            );
+          }
 
-    caches.keys().then((names) => {
-      names.forEach((name) => caches.delete(name));
-    });
+          // 4. पुराने सर्विस वर्कर को हटाएँ (Unregister)
+          if ("serviceWorker" in navigator) {
+            const registrations = await navigator.serviceWorker.getRegistrations();
+            for (let registration of registrations) {
+              await registration.unregister();
+            }
+          }
 
-    localStorage.setItem("app_version", APP_VERSION);
+          // नया वर्जन लोकल स्टोरेज में सेट करें
+          localStorage.setItem("lisa_pwa_version", data.version);
 
-    window.location.reload();
-  }
-}, []);
+          // 5. पेज को हार्ड रीलोड (Force Refresh) करें
+          window.location.reload();
+        } else {
+          // पहली बार ऐप इंस्टॉल होने पर वर्जन सेट करें
+          localStorage.setItem("lisa_pwa_version", data.version || APP_VERSION);
+        }
+      } catch (error) {
+        console.error("Cache auto-update check failed:", error);
+      }
+    };
+
+    autoBypassOldCache();
+  }, []);
 
   const [isAppUnlocked, setIsAppUnlocked] = useState<boolean>(() => {
     const active = localStorage.getItem("lisa_active_user");

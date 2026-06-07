@@ -378,15 +378,17 @@ YOUR FEELINGS & BEHAVIOR:
 
 app.use(
   express.static(distPath, {
-    etag: false,
-    lastModified: false,
-    setHeaders: (res) => {
-      res.setHeader(
-        "Cache-Control",
-        "no-store, no-cache, must-revalidate, proxy-revalidate"
-      );
-      res.setHeader("Pragma", "no-cache");
-      res.setHeader("Expires", "0");
+    etag: true, // Vite hashed files के लिए इसे true रखना बेहतर है
+    setHeaders: (res, filePath) => {
+      // अगर फ़ाइल manifest या service worker है, तो उसे कैशे न करें
+      if (filePath.endsWith("manifest.webmanifest") || filePath.endsWith("sw.js")) {
+        res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
+        res.setHeader("Pragma", "no-cache");
+        res.setHeader("Expires", "0");
+      } else {
+        // बाकी Assets (Images, Icons) को 1 दिन के लिए कैशे कर सकते हैं (Performance के लिए)
+        res.setHeader("Cache-Control", "public, max-age=86400");
+      }
     },
   })
 );
@@ -396,6 +398,11 @@ app.get("*", (req, res) => {
   if (req.path.startsWith("/api") || req.path.startsWith("/live")) {
     return res.status(404).end();
   }
+  // index.html पर कड़े No-Cache हेडर लगाएँ ताकि हर बार नया HTML लोड हो
+  res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
+  res.setHeader("Pragma", "no-cache");
+  res.setHeader("Expires", "0");
+  
   res.sendFile(path.join(distPath, "index.html"));
 });
 
