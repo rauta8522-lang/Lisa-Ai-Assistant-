@@ -297,7 +297,7 @@ npm run start:bot    # Start Twilio WhatsApp bot
 ### Audio Not Playing
 
 ```
-1. Unmute the app (check header icons)
+1. Unmute the app check header icons
 
 2. Check device volume
 
