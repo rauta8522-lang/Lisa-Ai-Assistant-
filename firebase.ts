@@ -19,8 +19,7 @@ const firebaseConfig = {
 
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
-export const db = getFirestore(app, config.firestoreDatabaseId); // Use explicit databaseId
-const analytics = getAnalytics(app);
+export const db = getFirestore(app);
 
 // add these lines
 export const auth = getAuth(app);

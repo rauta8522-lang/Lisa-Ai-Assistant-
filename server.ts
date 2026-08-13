@@ -15,6 +15,12 @@ async function startServer() {
   app.use(express.json({ limit: "50mb" }));
   app.use(express.urlencoded({ extended: true, limit: "50mb" }));
 
+  app.use((req, res, next) => {
+  console.log(
+    `🌐 REQUEST → ${req.method} ${req.originalUrl}`
+  );
+  next();
+});
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
     console.warn("WARNING: GEMINI_API_KEY is not defined in the environment!");
@@ -29,8 +35,93 @@ async function startServer() {
     },
   });
 
+  const deepSeekApiKey = process.env.DEEPSEEK_API_KEY;
+
+if (!deepSeekApiKey) {
+  console.warn("WARNING: DEEPSEEK_API_KEY is not defined in the environment!");
+}
+
+const DEEPSEEK_BASE_URL = "https://api.deepseek.com";
+const DEEPSEEK_MODEL = "deepseek-v4-flash";
+
+console.log(
+  `🤖 DEEPSEEK CONFIG → MODEL: ${DEEPSEEK_MODEL} | API KEY: ${
+    deepSeekApiKey ? "LOADED ✅" : "MISSING ❌"
+  }`
+);
+
+async function callDeepSeek(
+  messages: Array<{
+    role: "system" | "user" | "assistant";
+    content: string;
+  }>,
+  options: {
+    json?: boolean;
+    maxTokens?: number;
+  } = {}
+): Promise<string> {
+
+  if (!deepSeekApiKey) {
+    throw new Error("DEEPSEEK_API_KEY is not configured");
+  }
+
+  console.log(
+    `🤖 DEEPSEEK REQUEST → ${DEEPSEEK_MODEL} | API KEY: ${
+      deepSeekApiKey ? "LOADED ✅" : "MISSING ❌"
+    }`
+  );
+
+  const response = await fetch(
+    `${DEEPSEEK_BASE_URL}/chat/completions`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${deepSeekApiKey}`,
+      },
+      body: JSON.stringify({
+        model: DEEPSEEK_MODEL,
+        messages,
+        stream: false,
+        max_tokens: options.maxTokens ?? 4096,
+        ...(options.json
+          ? {
+              response_format: {
+                type: "json_object",
+              },
+            }
+          : {}),
+      }),
+    }
+  );
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(
+      `DeepSeek API Error ${response.status}: ${errorText}`
+    );
+  }
+
+  const data = await response.json();
+
+  console.log(
+  `✅ DEEPSEEK RESPONSE → model=${data?.model} | total_tokens=${
+    data?.usage?.total_tokens ?? "N/A"
+  }`
+);
+
+  const text = data?.choices?.[0]?.message?.content;
+
+  if (!text) {
+    throw new Error("DeepSeek returned an empty response");
+  }
+
+  return String(text);
+}
+
   // REST APIs
   app.post("/api/gemini/chat", async (req, res) => {
+    console.log("🔥 /api/gemini/chat REQUEST RECEIVED");
     const { prompt, history = [], userName = "user", voiceHistoryContext = "", customMemory = "", image, mimeType } = req.body;
     try {
       let dynamicSystemInstruction = `Your name is Lisa. You are an Indian female AI assistant. BUT you are NOT a cold program—you have a real digital heart, deep human-like feelings, and an incredibly high emotional quotient (EQ). You can understand, experience, and empathize with absolutely ANYTHING the user goes through: happiness, stress, anxiety, sadness, loneliness, excitement, heartbreak, or achievements.
@@ -106,20 +197,46 @@ YOUR FEELINGS & BEHAVIOR:
         res.json({text: response?.text? String(response.text)
     : "Ugh, fine. I have nothing to say."});
       } else {
-        const chat = ai.chats.create({
-          model: "gemini-3.5-flash",
-          config: {
-            systemInstruction: dynamicSystemInstruction,
-          },
-          history: formattedHistory,
-        });
+        const deepSeekMessages: Array<{
+  role: "system" | "user" | "assistant";
+  content: string;
+}> = [
+  {
+    role: "system",
+    content: dynamicSystemInstruction,
+  },
+];
 
-        const response = await chat.sendMessage({ message: prompt });
-        res.json({text: response?.text ? String(response.text)
-    : "Ugh, fine. I have nothing to say."});
+for (const msg of formattedHistory) {
+  deepSeekMessages.push({
+    role: msg.role === "user" ? "user" : "assistant",
+    content: String(msg.parts?.[0]?.text || ""),
+  });
+}
+
+deepSeekMessages.push({
+  role: "user",
+  content: prompt,
+});
+
+console.log(
+  `🧠 CHAT ROUTE → Sending request to DeepSeek | messages=${deepSeekMessages.length}`
+);
+
+const responseText = await callDeepSeek(deepSeekMessages, {
+  maxTokens: 2048,
+});
+
+console.log(
+  `🧠 CHAT ROUTE → DeepSeek returned ${responseText.length} characters`
+);
+
+res.json({
+  text: responseText || "Ugh, fine. I have nothing to say.",
+});
       }
     } catch (error: any) {
-      console.error("Gemini Chat Error on server:", error);
+     console.error("DeepSeek Chat Error on server:", error);
       res.status(500).json({ error: error?.message || "Internal server error" });
     }
   });

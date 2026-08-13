@@ -449,7 +449,7 @@ export default function StudyStudio({ isOpen, onClose, palette, userName }: Stud
     if (activeTab === "savedNotes" && auth.currentUser) {
       const fetchSavedNotes = async () => {
         try {
-          const q = query(collection(db, "users", auth.currentUser!.email!, "savedNotes"));
+          const q = query(collection(db, "users", auth.currentUser!.uid!, "savedNotes"));
           const querySnapshot = await getDocs(q);
           const notes: GeneratedNote[] = [];
           querySnapshot.forEach((doc) => {

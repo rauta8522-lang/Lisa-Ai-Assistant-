@@ -7,10 +7,9 @@ import { auth, googleProvider } from "../config/firebase";
 const logo = "/pwa-512x512.png";
 
 interface LoginScreenProps {
-  onLoginSuccess: (user: { email: string; name: string }) => void;
+  onLoginSuccess: (user: {uid: string; email: string; name: string;}) => void;
   onLisaSpeak: (text: string) => void;
 }
-
 export default function LoginScreen({ onLoginSuccess, onLisaSpeak }: LoginScreenProps) {
   const [isSignup, setIsSignup] = useState(false);
   const [email, setEmail] = useState("");
@@ -63,7 +62,7 @@ export default function LoginScreen({ onLoginSuccess, onLisaSpeak }: LoginScreen
       }
 
       setLoading(false);
-      onLoginSuccess({ email: user.email, name: user.name });
+      onLoginSuccess({uid: user.uid, email: user.email!, name: user.displayName || "User"});
     }, 700);
   };
 
@@ -120,18 +119,19 @@ export default function LoginScreen({ onLoginSuccess, onLisaSpeak }: LoginScreen
         return;
       }
 
-      const newUser = {
-        email: emailVal.toLowerCase(),
-        name: nameVal,
-        passwordHash: passVal,
-      };
+  const newUser = {
+  uid: crypto.randomUUID(), // ya Date.now().toString()
+  email: emailVal.toLowerCase(),
+  name: nameVal,
+  passwordHash: passVal,
+};
 
       const updatedList = [...users, newUser];
       localStorage.setItem("lisa_registered_users", JSON.stringify(updatedList));
 
       setLoading(false);
       onLisaSpeak(`Wah kshama, naya account toh ban gaya. Chalo ab fatfat login karo aur shubharambh kijiye!`);
-      onLoginSuccess({ email: newUser.email, name: newUser.name });
+      onLoginSuccess({uid: newUser.uid, email: newUser.email, name: newUser.name,});
     }, 700);
   };
 
@@ -165,7 +165,7 @@ export default function LoginScreen({ onLoginSuccess, onLisaSpeak }: LoginScreen
         localStorage.setItem("lisa_registered_users", JSON.stringify(users));
       }
 
-      onLoginSuccess({ email: emailVal, name: nameVal });
+      onLoginSuccess({uid: user.uid,email: emailVal,name: nameVal});
     } catch (err: any) {
       setError(err?.message || "Google sign in failed. Try again.");
       setLoading(false);

@@ -3,6 +3,7 @@ import { Mic, MicOff, Loader2, Volume2, VolumeX, Keyboard, Send, Trash2, User, S
 import { getLisaResponse, getLisaAudio, resetLisaSession } from "./services/geminiService";
 import { processCommand } from "./services/commandService";
 import { LiveSessionManager } from "./services/liveService";
+import VRMAvatar from "./components/VRMAvatar";
 import Visualizer from "./components/Visualizer";
 import PermissionModal from "./components/PermissionModal";
 import LoginScreen from "./components/LoginScreen";
@@ -144,12 +145,12 @@ function detectAndPlayMedia(text: string): { type: "youtube" | "spotify"; query:
 
 export default function App() {
   const [appState, setAppState] = useState<AppState>("idle");
-  const [currentUser, setCurrentUser] = useState<{ email: string; name: string } | null>(null);
+  const [currentUser, setCurrentUser] = useState<{uid: string; email: string; name: string } | null>(null);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       if (user) {
-        setCurrentUser({ email: user.email || "", name: user.displayName || "" });
+        setCurrentUser({uid: user.uid, email: user.email!, name: user.displayName || "User",});
       } else {
         setCurrentUser(null);
       }
@@ -314,7 +315,7 @@ export default function App() {
       const fetchMessages = async () => {
         try {
           const q = query(
-            collection(db, "users", currentUser.email, "chatHistory")
+            collection(db, "users", currentUser.uid, "chatHistory")
           );
           const querySnapshot = await getDocs(q);
           const loadedMessages: ChatMessage[] = [];

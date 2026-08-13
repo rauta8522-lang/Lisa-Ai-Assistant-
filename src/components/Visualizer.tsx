@@ -9,7 +9,28 @@ interface VisualizerProps {
   palette: ThemePalette;
   onToggleListening: () => void;
 }
+function VRMAvatar() {
+  console.log("VRMAvatar Mounted");
 
+  return (
+    <div
+      style={{
+        width: 250,
+        height: 250,
+        background: "red",
+        color: "white",
+        display: "flex",
+        justifyContent: "center",
+        alignItems: "center",
+        fontSize: 28,
+        fontWeight: "bold",
+        borderRadius: 20,
+      }}
+    >
+      TEST
+    </div>
+  );
+}
 export default function Visualizer({ state, palette, onToggleListening }: VisualizerProps) {
   const theme = palette?.visColors?.[state] || {
     color: "rgba(6, 182, 212, 0.8)",
@@ -108,14 +129,11 @@ export default function Visualizer({ state, palette, onToggleListening }: Visual
       
       {/* Dynamic Core Blob / Listen Button */}
       <motion.div
-        animate={blobAnimation}
-        className="relative w-40 h-40 backdrop-blur-xl border border-white/10 flex items-center justify-center shadow-2xl z-10"
-        style={{ 
-          background: `radial-gradient(circle at center, ${theme.color}30, transparent 80%)`
-        }}
-      >
-        <span className="font-serif text-white/95 text-2xl tracking-[0.25em] drop-shadow-md">LISA</span>
-      </motion.div>
+  animate={blobAnimation}
+  className="relative w-80 h-96 flex items-center justify-center z-10"
+>
+  <VRMAvatar />
+</motion.div>
     </div>
   );
 }

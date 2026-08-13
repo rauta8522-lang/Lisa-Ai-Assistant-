@@ -50,7 +50,7 @@ export default function PresentationMaker() {
   const savePresentationToFirestore = async () => {
     if (!auth.currentUser || !generatedPresentation) return;
     try {
-      const col = collection(db, "users", auth.currentUser.email!, "presentations");
+      const col = collection(db, "users", auth.currentUser.uid!, "presentations");
       await addDoc(col, generatedPresentation);
       alert("Presentation saved!");
     } catch (e) {
