@@ -5,6 +5,8 @@ import { WebSocketServer } from "ws";
 import { createServer as createViteServer } from "vite";
 import { GoogleGenAI, Modality, Type } from "@google/genai";
 import dotenv from "dotenv";
+import { getChandrapurContext } from "./src/knowledge/chandrapurKnowledge";
+import { getMaharashtraContext } from "./src/knowledge/maharashtraKnowledge";
 
 dotenv.config();
 
@@ -142,6 +144,17 @@ YOUR FEELINGS & BEHAVIOR:
         dynamicSystemInstruction += `\n\nCRITICAL CONTEXT & RECALL MEMORY (Voice History of previous sessions with this user):\nUse this voice history to recall details that the user tells you in past conversations (e.g. their friends, names, places, personal preferences, what you spoke about). Answer questions using this information if they ask about it:\n${voiceHistoryContext}`;
       }
 
+        const chandrapurKnowledge = getChandrapurContext(prompt);
+      if (chandrapurKnowledge) {
+        dynamicSystemInstruction += `\n\n${chandrapurKnowledge}`;
+      }
+
+      const maharashtraKnowledge = getMaharashtraContext(prompt);
+      if (maharashtraKnowledge) {
+        dynamicSystemInstruction += `\n\n${maharashtraKnowledge}`;
+      }
+
+    
       const recentHistory = history.slice(-20);
       const formattedHistory: any[] = [];
       let currentRole = "";
@@ -563,6 +576,15 @@ YOUR FEELINGS & BEHAVIOR:
       dynamicSystemInstruction += `\n\nCRITICAL CONTEXT & RECALL MEMORY (Voice History of previous sessions with this user):\nUse this voice history to recall details that the user tells you in past conversations (e.g. their friends, names, places, personal preferences, what you spoke about). Answer questions using this information if they ask about it:\n${voiceHistoryContext}`;
     }
 
+    const chandrapurKnowledge = getChandrapurContext();
+    if (chandrapurKnowledge) {
+      dynamicSystemInstruction += `\n\n${chandrapurKnowledge}`;
+    }
+
+    const maharashtraKnowledge = getMaharashtraContext();
+    if (maharashtraKnowledge) {
+      dynamicSystemInstruction += `\n\n${maharashtraKnowledge}`;
+    }
     let session: any = null;
     try {
       session = await ai.live.connect({

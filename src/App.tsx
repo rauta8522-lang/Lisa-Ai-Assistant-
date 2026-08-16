@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
-import { Mic, MicOff, Loader2, Volume2, VolumeX, Keyboard, Send, Trash2, User, Settings, MessageSquare, Palette, BookOpen, MessageCircle, FileText, X, Play, Camera } from "lucide-react";
-import { getLisaResponse, getLisaAudio, resetLisaSession } from "./services/geminiService";
+import { Mic, MicOff, Loader2, Volume2, VolumeX, Keyboard, Send, Trash2, User, Settings, MessageSquare, Palette, BookOpen, MessageCircle, FileText, X, Play, Camera } from "lucide-react";import { getLisaResponse, getLisaAudio, resetLisaSession } from "./services/geminiService";
 import { processCommand } from "./services/commandService";
 import { LiveSessionManager } from "./services/liveService";
 import VRMAvatar from "./components/VRMAvatar";
@@ -161,20 +160,36 @@ export default function App() {
   useEffect(() => {
     const autoBypassOldCache = async () => {
       try {
-        // 1. सर्वर से ताज़ा version.json फ़ाइल मँगाएँ (बिना कैशे के)
+        if (import.meta.env.DEV) {
+          console.log("Dev mode detected. Clearing stale service worker caches...");
+          localStorage.clear();
+          if ("caches" in window) {
+            const cacheNames = await caches.keys();
+            await Promise.all(
+              cacheNames.map((cacheName) => caches.delete(cacheName))
+            );
+          }
+          if ("serviceWorker" in navigator) {
+            const registrations = await navigator.serviceWorker.getRegistrations();
+            for (let registration of registrations) {
+              await registration.unregister();
+            }
+          }
+          console.log("Stale caches cleared in dev mode.");
+          return;
+        }
+
         const res = await fetch("/version.json?t=" + Date.now(), {
           cache: "no-store",
         });
+        if (!res.ok) throw new Error("version.json not found");
         const data = await res.json();
-        
-        // लोकल स्टोरेज में सेव पुराना वर्जन देखें
+
         const currentVersion = localStorage.getItem("lisa_pwa_version");
 
-        // 2. अगर सर्वर का वर्जन लोकल वर्जन से अलग है
         if (currentVersion && data.version !== currentVersion) {
           console.log("New version detected! Wiping old browser cache...");
 
-          // 3. लोकल स्टोरेज और ब्राउज़र कैशे को पूरी तरह खाली करें
           localStorage.clear();
           if ("caches" in window) {
             const cacheNames = await caches.keys();
@@ -183,7 +198,6 @@ export default function App() {
             );
           }
 
-          // 4. पुराने सर्विस वर्कर को हटाएँ (Unregister)
           if ("serviceWorker" in navigator) {
             const registrations = await navigator.serviceWorker.getRegistrations();
             for (let registration of registrations) {
@@ -191,13 +205,9 @@ export default function App() {
             }
           }
 
-          // नया वर्जन लोकल स्टोरेज में सेट करें
           localStorage.setItem("lisa_pwa_version", data.version);
-
-          // 5. पेज को हार्ड रीलोड (Force Refresh) करें
           window.location.reload();
         } else {
-          // पहली बार ऐप इंस्टॉल होने पर वर्जन सेट करें
           localStorage.setItem("lisa_pwa_version", data.version || APP_VERSION);
         }
       } catch (error) {
@@ -941,11 +951,16 @@ export default function App() {
 
       {/* Header */}
       <header className="absolute top-0 left-0 w-full flex justify-between items-center z-20 shrink-0 px-6 py-4 md:px-10 md:py-5 backdrop-blur-md bg-white/[0.02] border-b border-white/[0.05]">
-        <div className="flex items-center gap-4 cursor-pointer group" onClick={toggleListening}>
-          <div className={`w-9 h-9 rounded-full bg-gradient-to-tr ${activePalette.avatarBg} flex items-center justify-center font-bold text-sm shadow-xl shadow-black/20 group-hover:scale-105 transition-transform border border-white/10`}>
+        <div className="flex items-center gap-3.5 cursor-pointer group" onClick={toggleListening}>
+          <div className={`w-9 h-9 rounded-full bg-gradient-to-tr ${activePalette.avatarBg} flex items-center justify-center font-bold text-sm shadow-xl shadow-black/20 group-hover:scale-105 transition-transform border border-white/10 shrink-0`}>
             L
           </div>
-          <h1 className="text-xl font-serif font-medium tracking-wide text-white/90 group-hover:text-emerald-400 transition-colors">Lisa</h1>
+          <div className="flex flex-col justify-center">
+            <h1 className="text-xl font-serif font-medium tracking-wide text-white/90 group-hover:text-emerald-400 transition-colors leading-tight">Lisa</h1>
+            <span className="text-[9px] sm:text-[10px] font-sans font-normal text-white/50 tracking-tight leading-none mt-0.5 whitespace-nowrap">
+              Zodiactech Software & IT Services Pvt. Ltd.
+            </span>
+          </div>
         </div>
         <div className="flex items-center gap-2">
           {currentUser && (
