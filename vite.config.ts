@@ -9,19 +9,19 @@ export default defineConfig(({ mode }) => {
 
   return {
     plugins: [
-      react(), 
+      react(),
       tailwindcss(),
       VitePWA({ // 👈 PWA कॉन्फ़िगरेशन यहाँ मर्ज कर दिया है
-        registerType: 'autoUpdate', 
+        registerType: 'autoUpdate',
         includeAssets: [
-          'favicon.ico', 
-          'apple-touch-icon.png', 
-          'masked-icon.svg', 
+          'favicon.ico',
+          'apple-touch-icon.png',
+          'masked-icon.svg',
           'robots.txt'
         ],
         workbox: {
-          cleanupOutdatedCaches: true, 
-          skipWaiting: true,           
+          cleanupOutdatedCaches: true,
+          skipWaiting: true,
           clientsClaim: true,
         },
         manifest: {
@@ -67,11 +67,6 @@ export default defineConfig(({ mode }) => {
         }
       })
     ],
-
-    define: {
-      'process.env.GEMINI_API_KEY': JSON.stringify(env.GEMINI_API_KEY),
-    },
-
     resolve: {
       alias: {
         '@': path.resolve(__dirname, '.'),
@@ -80,8 +75,8 @@ export default defineConfig(({ mode }) => {
 
     server: {
       hmr: process.env.DISABLE_HMR !== 'true',
-      host: true, 
-      port: 3000, 
+      host: true,
+      port: 3000,
       allowedHosts: [
         'lisa-ai-assistant.onrender.com',
       ],

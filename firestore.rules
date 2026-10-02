@@ -1,22 +1,97 @@
 rules_version = '2';
-
 service cloud.firestore {
   match /databases/{database}/documents {
 
+    // Helper functions
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isOrgAdmin(orgId) {
+      return isSignedIn() &&
+        exists(/databases/$(database)/documents/organizations/$(orgId)/users/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/organizations/$(orgId)/users/$(request.auth.uid)).data.role == "admin";
+    }
+
+    function belongsToOrg(orgId) {
+      return isSignedIn() &&
+        exists(/databases/$(database)/documents/organizations/$(orgId)/users/$(request.auth.uid));
+    }
+
+    // Direct User Document & Subcollections
+    match /users/{userId} {
+      allow read, write: if isOwner(userId);
+
+      match /chatHistory/{messageId} {
+        allow read, write: if isOwner(userId);
+      }
+
+      match /conversations/{conversationId} {
+        allow read, write: if isOwner(userId);
+
+        match /messages/{messageId} {
+          allow read, write: if isOwner(userId);
+        }
+      }
+
+      match /presentations/{presentationId} {
+        allow read, write: if isOwner(userId);
+      }
+
+      match /savedNotes/{noteId} {
+        allow read, write: if isOwner(userId);
+      }
+
+      match /{allSubcollections=**} {
+        allow read, write: if isOwner(userId);
+      }
+    }
+
+    // Feedback Collection
     match /feedbacks/{feedbackId} {
-      allow create: if request.auth != null;
-      allow read: if request.auth != null &&
-                  request.auth.token.email == "rauta8522@gmail.com";
+      allow create: if isSignedIn();
+      allow read: if isSignedIn();
+      allow update, delete: if false;
     }
 
-    match /chatHistory/{userId} {
-      allow read, write: if request.auth != null &&
-                         request.auth.uid == userId;
+    // Organization Collections
+    match /organizations/{orgId} {
+      allow read: if belongsToOrg(orgId);
+      allow write: if isOrgAdmin(orgId);
+
+      match /users/{userId} {
+        allow read: if belongsToOrg(orgId) && (request.auth.uid == userId || isOrgAdmin(orgId));
+        allow write: if isOrgAdmin(orgId) || (request.auth.uid == userId && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'organizationId']));
+      }
+
+      match /conversations/{conversationId} {
+        allow read: if belongsToOrg(orgId) && (resource.data.userId == request.auth.uid || isOrgAdmin(orgId));
+        allow write: if belongsToOrg(orgId) && (request.resource.data.userId == request.auth.uid || isOrgAdmin(orgId));
+
+        match /messages/{messageId} {
+          allow read, write: if belongsToOrg(orgId) && (get(/databases/$(database)/documents/organizations/$(orgId)/conversations/$(conversationId)).data.userId == request.auth.uid || isOrgAdmin(orgId));
+        }
+      }
+
+      match /documents/{docId} {
+        allow read: if belongsToOrg(orgId) && (resource.data.userId == request.auth.uid || isOrgAdmin(orgId));
+        allow write: if belongsToOrg(orgId) && (request.resource.data.userId == request.auth.uid || isOrgAdmin(orgId));
+      }
+
+      match /analytics/{analyticsId} {
+        allow read: if isOrgAdmin(orgId);
+        allow write: if belongsToOrg(orgId);
+      }
     }
 
-    match /chatHistory/{userId}/{document=**} {
-      allow read, write: if request.auth != null &&
-                         request.auth.uid == userId;
+    // Global analytics
+    match /product_analytics/{id} {
+      allow read: if false;
+      allow create: if isSignedIn();
     }
   }
 }

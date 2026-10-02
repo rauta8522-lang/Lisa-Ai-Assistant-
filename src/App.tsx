@@ -1,16 +1,36 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
-import { Mic, MicOff, Loader2, Volume2, VolumeX, Keyboard, Send, Trash2, User, Settings, MessageSquare, Palette, BookOpen, MessageCircle, FileText, X, Play, Camera } from "lucide-react";import { getLisaResponse, getLisaAudio, resetLisaSession } from "./services/geminiService";
+import { Mic, MicOff, Loader2, Volume2, VolumeX, Keyboard, Send, Trash2, User, Settings, MessageSquare, Palette, BookOpen, MessageCircle, FileText, X, Play, Camera, RefreshCw, Crown, FileSearch, Shield, Brain, Sparkles, Clock, Edit3, Check, RotateCcw, Plus, UserCheck, Database, Wand2, Tag, Search, Filter, ShieldCheck, Briefcase, Activity, HeartPulse, GraduationCap, Compass, Play as PlayIcon, Code, ShieldAlert } from "lucide-react";
+import { getLisaResponse, getLisaAudio, resetLisaSession, sendLisaMessageWithRetry, fetchConversationMessages, fetchConversations, deleteConversationApi, updateConversationTitleApi, fetchUserFactsApi, synthesizeCustomPersonaApi } from "./services/geminiService";
 import { processCommand } from "./services/commandService";
 import { LiveSessionManager } from "./services/liveService";
+import { ConnectionStatus, PersonaConfig, ConversationSession, ExtractedFact } from "./core/memory/types";
+import { DEFAULT_PERSONAS, ContextBuilder } from "./core/memory/ContextBuilder";
+import { AdaptivePersonaEngine, ARCHETYPE_CATALOG } from "./core/memory/AdaptivePersonaEngine";
+import { ConnectionStatusBar } from "./components/ConnectionStatusBar";
+import { PersonaActivationToast, PersonaToastData } from "./components/PersonaActivationToast";
 import VRMAvatar from "./components/VRMAvatar";
 import Visualizer from "./components/Visualizer";
+import { characterManager } from "./core/character/CharacterManager";
+import { LisaExpression } from "./core/character/types";
 import PermissionModal from "./components/PermissionModal";
 import LoginScreen from "./components/LoginScreen";
 import ProfileModal from "./components/ProfileModal";
 import StudyStudio from "./components/StudyStudio";
 import PDFMaker from "./components/PDFMaker";
 import BiometricLockScreen from "./components/BiometricLockScreen";
-import { playPCM, speakWithWebSpeech } from "./utils/audioUtils";
+import { DocumentInspectorModal } from "./components/DocumentInspectorModal";
+import { AdminPanelModal } from "./components/AdminPanelModal";
+import MediaWidget from "./components/MediaWidget";
+import { analytics } from "./services/analyticsService";
+import { parseDocumentApi } from "./services/documentService";
+import { DocumentRecord } from "./core/documents/DocumentIntelligenceEngine";
+import { GreetingEngine } from "./core/greeting/GreetingEngine";
+import { playPCM } from "./utils/audioUtils";
+import { getLisaPreferredVoice } from "./utils/voiceUtils";
+import { ComputerAgent } from "./core/computer/ComputerAgent";
+import { ComputerTaskPlanner } from "./core/computer/ComputerTaskPlanner";
+import { ComputerTaskPlan, ComputerAgentStatus } from "./core/computer/ComputerTaskTypes";
+import { ComputerAgentWidget } from "./components/ComputerAgentWidget";
 import { motion, AnimatePresence } from "motion/react";
 import { THEME_PALETTES, ThemePalette } from "./utils/theme";
 import { getUserAvatarUrl } from "./utils/avatar";
@@ -44,38 +64,38 @@ function detectAndPlayMedia(text: string): { type: "youtube" | "spotify"; query:
   }
 
   // Detect search vs play intent
-  const isSearchIntent = 
-    norm.includes("search") || 
-    norm.includes("khojo") || 
-    norm.includes("khojna") || 
-    norm.includes("dhundho") || 
-    norm.includes("dhoondho") || 
-    norm.includes("dhoondo") || 
-    norm.includes("dhundo") || 
-    norm.includes("results") || 
+  const isSearchIntent =
+    norm.includes("search") ||
+    norm.includes("khojo") ||
+    norm.includes("khojna") ||
+    norm.includes("dhundho") ||
+    norm.includes("dhoondho") ||
+    norm.includes("dhoondo") ||
+    norm.includes("dhundo") ||
+    norm.includes("results") ||
     norm.includes("find");
 
   const mode: "play" | "search" = isSearchIntent ? "search" : "play";
 
   // Verify it qualifies as a media command
-  const hasMediaKeywords = 
-    norm.includes("youtube") || 
-    norm.includes("utube") || 
-    norm.includes("spotify") || 
-    norm.includes("play") || 
-    norm.includes("chalao") || 
-    norm.includes("bajao") || 
-    norm.includes("sunao") || 
-    norm.includes("suna") || 
-    norm.includes("chalana") || 
-    norm.includes("chala") || 
-    norm.includes("baja") || 
-    norm.includes("gana") || 
-    norm.includes("song") || 
-    norm.includes("video") || 
-    norm.includes("search") || 
-    norm.includes("khojo") || 
-    norm.includes("dhundho") || 
+  const hasMediaKeywords =
+    norm.includes("youtube") ||
+    norm.includes("utube") ||
+    norm.includes("spotify") ||
+    norm.includes("play") ||
+    norm.includes("chalao") ||
+    norm.includes("bajao") ||
+    norm.includes("sunao") ||
+    norm.includes("suna") ||
+    norm.includes("chalana") ||
+    norm.includes("chala") ||
+    norm.includes("baja") ||
+    norm.includes("gana") ||
+    norm.includes("song") ||
+    norm.includes("video") ||
+    norm.includes("search") ||
+    norm.includes("khojo") ||
+    norm.includes("dhundho") ||
     norm.includes("dhoondho");
 
   if (!hasMediaKeywords) {
@@ -150,46 +170,32 @@ export default function App() {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       if (user) {
         setCurrentUser({uid: user.uid, email: user.email!, name: user.displayName || "User",});
+        analytics.track("login", { feature: "auth", organization: "global" });
       } else {
         setCurrentUser(null);
       }
     });
+    analytics.track("session_started", { feature: "core" });
     return unsubscribe;
   }, []);
 
   useEffect(() => {
     const autoBypassOldCache = async () => {
       try {
-        if (import.meta.env.DEV) {
-          console.log("Dev mode detected. Clearing stale service worker caches...");
-          localStorage.clear();
-          if ("caches" in window) {
-            const cacheNames = await caches.keys();
-            await Promise.all(
-              cacheNames.map((cacheName) => caches.delete(cacheName))
-            );
-          }
-          if ("serviceWorker" in navigator) {
-            const registrations = await navigator.serviceWorker.getRegistrations();
-            for (let registration of registrations) {
-              await registration.unregister();
-            }
-          }
-          console.log("Stale caches cleared in dev mode.");
-          return;
-        }
-
+        // 1. सर्वर से ताज़ा version.json फ़ाइल मँगाएँ (बिना कैशे के)
         const res = await fetch("/version.json?t=" + Date.now(), {
           cache: "no-store",
         });
-        if (!res.ok) throw new Error("version.json not found");
         const data = await res.json();
 
+        // लोकल स्टोरेज में सेव पुराना वर्जन देखें
         const currentVersion = localStorage.getItem("lisa_pwa_version");
 
+        // 2. अगर सर्वर का वर्जन लोकल वर्जन से अलग है
         if (currentVersion && data.version !== currentVersion) {
           console.log("New version detected! Wiping old browser cache...");
 
+          // 3. लोकल स्टोरेज और ब्राउज़र कैशे को पूरी तरह खाली करें
           localStorage.clear();
           if ("caches" in window) {
             const cacheNames = await caches.keys();
@@ -198,6 +204,7 @@ export default function App() {
             );
           }
 
+          // 4. पुराने सर्विस वर्कर को हटाएँ (Unregister)
           if ("serviceWorker" in navigator) {
             const registrations = await navigator.serviceWorker.getRegistrations();
             for (let registration of registrations) {
@@ -205,9 +212,13 @@ export default function App() {
             }
           }
 
+          // नया वर्जन लोकल स्टोरेज में सेट करें
           localStorage.setItem("lisa_pwa_version", data.version);
+
+          // 5. पेज को हार्ड रीलोड (Force Refresh) करें
           window.location.reload();
         } else {
+          // पहली बार ऐप इंस्टॉल होने पर वर्जन सेट करें
           localStorage.setItem("lisa_pwa_version", data.version || APP_VERSION);
         }
       } catch (error) {
@@ -247,9 +258,203 @@ export default function App() {
   });
 
   const [showProfileModal, setShowProfileModal] = useState(false);
-  const [isChatOpen, setIsChatOpen] = useState(true);
+  const [isChatOpen, setIsChatOpen] = useState(false);
   const [isStudyOpen, setIsStudyOpen] = useState(false);
   const [isPDFMakerOpen, setIsPDFMakerOpen] = useState(false);
+  const [activeConversationId, setActiveConversationId] = useState<string>(() => {
+    return localStorage.getItem("lisa_active_conv_id") || ("conv_" + Date.now() + "_" + Math.random().toString(36).substring(2, 7));
+  });
+
+  useEffect(() => {
+    if (activeConversationId) {
+      localStorage.setItem("lisa_active_conv_id", activeConversationId);
+    }
+  }, [activeConversationId]);
+
+  const [activePersona, setActivePersona] = useState<PersonaConfig>(() => {
+    const saved = localStorage.getItem("lisa_active_persona");
+    if (saved) {
+      try {
+        return JSON.parse(saved);
+      } catch (e) {}
+    }
+    return DEFAULT_PERSONAS.default;
+  });
+
+  const [personaToast, setPersonaToast] = useState<PersonaToastData | null>(null);
+
+  const triggerPersonaToast = useCallback((title: string, subtitle?: string, icon?: string, color?: string, durationMs = 3200) => {
+    setPersonaToast({
+      id: "toast_" + Date.now() + "_" + Math.random().toString(36).substring(2, 6),
+      title,
+      subtitle,
+      icon,
+      color,
+      durationMs
+    });
+  }, []);
+
+  // Sync appState to characterManager
+  useEffect(() => {
+    switch (appState) {
+      case "listening":
+        characterManager.setAnimation("listening");
+        characterManager.setExpression("focused");
+        characterManager.setSpeaking(false);
+        break;
+      case "processing":
+        characterManager.setAnimation("thinking");
+        characterManager.setExpression("thinking");
+        characterManager.setSpeaking(false);
+        break;
+      case "speaking":
+        characterManager.setAnimation("talking");
+        characterManager.setSpeaking(true);
+        break;
+      case "idle":
+        characterManager.setAnimation("idle");
+        characterManager.setExpression("neutral");
+        characterManager.setSpeaking(false);
+        break;
+    }
+  }, [appState]);
+
+  // Sync persona to characterManager
+  useEffect(() => {
+    if (activePersona) {
+      characterManager.setPersona(activePersona.id);
+    }
+  }, [activePersona]);
+
+  // Rudimentary sentiment-based expression picker
+  const pickExpressionFromText = (text: string): LisaExpression => {
+    const t = text.toLowerCase();
+    if (t.includes("!") || t.includes("wow") || t.includes("great") || t.includes("amazing")) return "excited";
+    if (t.includes("sorry") || t.includes("sad") || t.includes("apologize")) return "sad";
+    if (t.includes("haha") || t.includes("lol") || t.includes("funny") || t.includes("hehe")) return "happy";
+    if (t.includes("what") || t.includes("?") || t.includes("don't know")) return "confused";
+    if (t.includes("take care") || t.includes("help") || t.includes("support")) return "supportive";
+    return "neutral";
+  };
+
+  const [activeDocument, setActiveDocument] = useState<DocumentRecord | null>(null);
+  const [isDocModalOpen, setIsDocModalOpen] = useState(false);
+  const [isAdminModalOpen, setIsAdminModalOpen] = useState(false);
+
+  // Lisa Hub Consolidated Memory/Persona states
+  const [conversations, setConversations] = useState<ConversationSession[]>([]);
+  const [facts, setFacts] = useState<ExtractedFact[]>([]);
+  const [isLoadingHubData, setIsLoadingHubData] = useState(false);
+  const [editingConvId, setEditingConvId] = useState<string | null>(null);
+  const [editingConvTitle, setEditingConvTitle] = useState("");
+  const [personaSearchQuery, setPersonaSearchQuery] = useState("");
+  const [personaCategoryFilter, setPersonaCategoryFilter] = useState("all");
+  const [customPersonaQuery, setCustomPersonaQuery] = useState("");
+  const [isSynthesizingPersona, setIsSynthesizingPersona] = useState(false);
+  const [newFactInput, setNewFactInput] = useState("");
+  const [isAddingFact, setIsAddingFact] = useState(false);
+  const [activeTab, setActiveTab] = useState<"chat" | "voice" | "history" | "personas" | "memory">("chat");
+
+  const [currentTopic, setCurrentTopic] = useState<string>(() => {
+    return localStorage.getItem("lisa_active_topic") || "";
+  });
+
+  // Universal Computer / Desktop Control Agent State
+  const [computerPlan, setComputerPlan] = useState<ComputerTaskPlan | null>(() => ComputerAgent.restorePersistedTask());
+  const [computerStatus, setComputerStatus] = useState<ComputerAgentStatus>(() => {
+    const saved = ComputerAgent.restorePersistedTask();
+    return saved ? saved.status : "idle";
+  });
+
+  const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>("connected");
+  const [reconnectAttempt, setReconnectAttempt] = useState<number>(0);
+
+  useEffect(() => {
+    if (activeConversationId) {
+      localStorage.setItem("lisa_active_conv_id", activeConversationId);
+    }
+  }, [activeConversationId]);
+
+  useEffect(() => {
+    localStorage.setItem("lisa_active_persona", JSON.stringify(activePersona));
+    if (liveSessionRef.current) {
+      liveSessionRef.current.updateContext({ activePersona });
+    }
+  }, [activePersona]);
+
+  useEffect(() => {
+    localStorage.setItem("lisa_active_topic", currentTopic);
+    if (liveSessionRef.current) {
+      liveSessionRef.current.updateContext({ currentTopic });
+    }
+  }, [currentTopic]);
+
+  // Stripe Subscription return & status banner
+  const [subscriptionBanner, setSubscriptionBanner] = useState<{
+    type: "success" | "activating" | "canceled";
+    message: string;
+  } | null>(null);
+
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const subStatus = urlParams.get("subscription");
+
+    if (subStatus === "success") {
+      setSubscriptionBanner({
+        type: "activating",
+        message: "Payment received. Activating Lisa Pro 💎...",
+      });
+
+      // Clear query params from browser URL safely
+      window.history.replaceState({}, document.title, window.location.pathname);
+
+      let attempts = 0;
+      const interval = setInterval(async () => {
+        attempts++;
+        try {
+          const user = auth.currentUser;
+          if (!user) return;
+          const token = await user.getIdToken(true);
+          const res = await fetch("/api/subscription/status", {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          const data = await res.json();
+          if (data.plan === "paid" && data.subscriptionStatus === "active") {
+            clearInterval(interval);
+            setSubscriptionBanner({
+              type: "success",
+              message: "Welcome to Lisa Pro 💎! DeepSeek AI + Gemini Lisa Voice activated.",
+            });
+            setTimeout(() => {
+              setSubscriptionBanner(null);
+            }, 8000);
+          } else if (attempts >= 10) {
+            clearInterval(interval);
+            setSubscriptionBanner({
+              type: "success",
+              message: "Payment received! Lisa Pro will activate shortly.",
+            });
+            setTimeout(() => {
+              setSubscriptionBanner(null);
+            }, 8000);
+          }
+        } catch (err) {
+          if (attempts >= 10) clearInterval(interval);
+        }
+      }, 2000);
+
+      return () => clearInterval(interval);
+    } else if (subStatus === "canceled") {
+      setSubscriptionBanner({
+        type: "canceled",
+        message: "Checkout canceled. You remain on Lisa Free.",
+      });
+      window.history.replaceState({}, document.title, window.location.pathname);
+      setTimeout(() => {
+        setSubscriptionBanner(null);
+      }, 6000);
+    }
+  }, [currentUser]);
 
   // Home Screen Vision Chat Camera states
   const [isChatWebcamActive, setIsChatWebcamActive] = useState(false);
@@ -302,6 +507,185 @@ export default function App() {
     }
   };
 
+  // NEW: Restoration effect for persistent memory
+  useEffect(() => {
+    if (currentUser && activeConversationId && messages.length === 0) {
+      console.log(`[LISA MEMORY] Initializing session recovery for ${activeConversationId}`);
+      handleHubSelectConversation(activeConversationId);
+    }
+  }, [currentUser, activeConversationId]);
+
+  const [historySearchQuery, setHistorySearchQuery] = useState("");
+  const [memorySearchQuery, setMemorySearchQuery] = useState("");
+
+  const filteredConversations = conversations.filter(c =>
+    (c.title?.toLowerCase().includes(historySearchQuery.toLowerCase()) ||
+     c.topics?.some(t => t.toLowerCase().includes(historySearchQuery.toLowerCase())))
+  );
+
+  const filteredFacts = facts.filter(f =>
+    (f.content?.toLowerCase().includes(memorySearchQuery.toLowerCase()) ||
+     f.category?.toLowerCase().includes(memorySearchQuery.toLowerCase()))
+  );
+
+  const handleHubDeleteAllFacts = async () => {
+    if (!confirm("Are you sure you want to clear ALL memories? This cannot be undone.")) return;
+    try {
+      const token = await auth.currentUser?.getIdToken();
+      await fetch("/api/memory/facts", {
+        method: "DELETE",
+        headers: { ...(token ? { "Authorization": `Bearer ${token}` } : {}) }
+      });
+      setFacts([]);
+    } catch (e) {
+      console.error("Failed to clear memories:", e);
+    }
+  };
+
+  const formatTopic = (topic: string) => {
+    return topic.split(" ").map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
+  };
+  const loadLisaHubData = useCallback(async () => {
+    setIsLoadingHubData(true);
+    try {
+      const [convList, factList] = await Promise.all([
+        fetchConversations(),
+        fetchUserFactsApi()
+      ]);
+      setConversations(convList);
+      setFacts(factList);
+    } catch (e) {
+      console.error("Error loading Lisa Hub data:", e);
+    } finally {
+      setIsLoadingHubData(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (isChatOpen) {
+      loadLisaHubData();
+    }
+  }, [isChatOpen, loadLisaHubData]);
+
+  const handleHubSelectConversation = async (convId: string) => {
+    if (convId === activeConversationId && messages.length > 0) return;
+    setIsLoadingHubData(true);
+    try {
+      const { messages: loadedMsgs } = await fetchConversationMessages(convId);
+      setActiveConversationId(convId);
+      if (loadedMsgs && loadedMsgs.length > 0) {
+        const mapped: ChatMessage[] = loadedMsgs.map(m => ({
+          id: m.id || String(m.timestamp),
+          sender: (m.sender === "user" ? "user" : "lisa") as "user" | "lisa",
+          text: m.text
+        }));
+        setMessages(mapped);
+      } else {
+        setMessages([]);
+      }
+      resetLisaSession();
+      analytics.track("session_resumed", { conversationId: convId });
+    } catch (e) {
+      console.error("Error opening conversation:", e);
+    } finally {
+      setIsLoadingHubData(false);
+    }
+  };
+
+  const handleHubDeleteConversation = async (convId: string) => {
+    if (!confirm("Are you sure?")) return;
+    const ok = await deleteConversationApi(convId);
+    if (ok) {
+      setConversations(prev => prev.filter(c => c.id !== convId));
+      if (convId === activeConversationId) {
+        const newId = "conv_" + Date.now();
+        setActiveConversationId(newId);
+        setMessages([]);
+        resetLisaSession();
+      }
+    }
+  };
+
+  const handleHubSaveRename = async (convId: string) => {
+    if (!editingConvTitle.trim()) return;
+    const ok = await updateConversationTitleApi(convId, editingConvTitle.trim());
+    if (ok) {
+      setConversations(prev => prev.map(c => c.id === convId ? { ...c, title: editingConvTitle.trim() } : c));
+    }
+    setEditingConvId(null);
+  };
+
+  const handleHubSynthesizePersona = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!customPersonaQuery.trim() || isSynthesizingPersona) return;
+    setIsSynthesizingPersona(true);
+    try {
+      const synthesized = await synthesizeCustomPersonaApi(customPersonaQuery.trim()) ||
+        AdaptivePersonaEngine.buildDynamicPersona(customPersonaQuery.trim(), true);
+      if (synthesized) {
+        setActivePersona(synthesized);
+        localStorage.setItem("lisa_active_persona", JSON.stringify(synthesized));
+        setCustomPersonaQuery("");
+        if (liveSessionRef.current) {
+          liveSessionRef.current.updateContext({ activePersona: synthesized });
+        }
+        triggerPersonaToast(
+          `${synthesized.role || synthesized.name} Mode Activated`,
+          synthesized.domain || "Custom Specialty",
+          synthesized.visualProfile?.icon,
+          synthesized.visualProfile?.themeColor
+        );
+      }
+    } finally {
+      setIsSynthesizingPersona(false);
+    }
+  };
+
+  const handleHubAddFact = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newFactInput.trim() || isAddingFact) return;
+    setIsAddingFact(true);
+    try {
+      const res = await fetch("/api/memory/facts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ fact: newFactInput.trim(), category: "personal" })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setFacts(prev => [data.fact, ...prev]);
+        setNewFactInput("");
+      }
+    } finally {
+      setIsAddingFact(false);
+    }
+  };
+
+  const handleHubDeleteFact = async (factId: string) => {
+    try {
+      await fetch(`/api/memory/facts/${encodeURIComponent(factId)}`, { method: "DELETE" });
+      setFacts(prev => prev.filter(f => f.id !== factId));
+    } catch (e) { console.error(e); }
+  };
+
+  const getHubPersonaIcon = (id: string, iconName?: string) => {
+    const key = (iconName || id || "").toLowerCase();
+    if (key.includes("heart") || key.includes("hospital")) return <HeartPulse size={14} className="text-rose-400" />;
+    if (key.includes("compass") || key.includes("zoo")) return <Compass size={14} className="text-emerald-400" />;
+    if (key.includes("grad") || key.includes("teach")) return <GraduationCap size={14} className="text-cyan-400" />;
+    if (key.includes("code") || key.includes("dev")) return <Code size={14} className="text-amber-400" />;
+    if (key.includes("law") || key.includes("legal")) return <ShieldAlert size={14} className="text-indigo-400" />;
+    if (key.includes("briefcase") || key.includes("interview")) return <Briefcase size={14} className="text-blue-400" />;
+    if (key.includes("book") || key.includes("research")) return <BookOpen size={14} className="text-yellow-400" />;
+    return <Sparkles size={14} className="text-fuchsia-400" />;
+  };
+
+  const formatHubTimestamp = (ts?: number) => {
+    if (!ts) return "";
+    const date = new Date(ts);
+    return date.toLocaleDateString([], { month: "short", day: "numeric" });
+  };
+
   const [activePalette, setActivePalette] = useState<ThemePalette>(() => {
     const saved = localStorage.getItem("lisa_ui_palette");
     if (saved && (saved === "deep-space" || saved === "neon-sunset" || saved === "monochrome")) {
@@ -317,85 +701,124 @@ export default function App() {
 
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const messagesRef = useRef(messages);
-
-  // Synchronize history when active user changes or updates
-  useEffect(() => {
-    if (currentUser) {
-      // Fetch messages from Firestore
-      const fetchMessages = async () => {
-        try {
-          const q = query(
-            collection(db, "users", currentUser.uid, "chatHistory")
-          );
-          const querySnapshot = await getDocs(q);
-          const loadedMessages: ChatMessage[] = [];
-          querySnapshot.forEach((doc) => {
-            loadedMessages.push({ id: doc.id, ...doc.data() } as ChatMessage);
-          });
-          // Sort by ID or timestamp if possible. Using id (which is Date.now()) as a proxy for timestamp.
-          loadedMessages.sort((a, b) => parseInt(a.id) - parseInt(b.id));
-          setMessages(loadedMessages);
-        } catch (e) {
-          console.error("Failed to fetch chat history for " + currentUser.email, e);
-          setMessages([]);
-        }
-      };
-
-      fetchMessages();
-    } else {
-      setMessages([]);
-    }
-  }, [currentUser]);
+  const handleLisaSpeakRef = useRef<(phrase: string) => Promise<void>>(async () => {});
+  const handleGreetingDeliveredRef = useRef<(text: string) => void>(() => {});
 
   useEffect(() => {
     messagesRef.current = messages;
   }, [messages]);
 
-  // Dedicated state and ref for the new Voice History feature
-  const [voiceMessages, setVoiceMessages] = useState<ChatMessage[]>([]);
-  const voiceMessagesRef = useRef(voiceMessages);
-  const [activeTab, setActiveTab] = useState<"chat" | "voice">("chat");
-
-  // Load and sync voice history for the logged-in user
+  // ARCHITECTURE INTEGRATION: Thread-Scoped History Restoration
+  // Fetches the exact message history for the active conversation across reloads.
   useEffect(() => {
-    if (currentUser) {
-      const savedVoiceHistory = localStorage.getItem(`lisa_voice_history_${currentUser.email}`);
-      if (savedVoiceHistory) {
+    if (currentUser && activeConversationId) {
+      let isMounted = true;
+      const loadConversation = async () => {
         try {
-          const parsed = JSON.parse(savedVoiceHistory);
-          setVoiceMessages(parsed);
-          voiceMessagesRef.current = parsed;
+          setAppState("processing");
+          const { messages: loadedMessages } = await fetchConversationMessages(activeConversationId);
+
+          if (!isMounted) return;
+
+          if (loadedMessages && loadedMessages.length > 0) {
+            const mappedMessages: ChatMessage[] = loadedMessages.map((m: any) => ({
+              id: m.id || String(m.timestamp),
+              sender: (m.sender === "user" ? "user" : "lisa") as "user" | "lisa",
+              text: m.text
+            }));
+
+            setMessages(mappedMessages);
+            messagesRef.current = mappedMessages;
+
+            // Trigger Smart Greeting for restored conversation
+            GreetingEngine.evaluateAndTriggerGreeting({
+              currentUser,
+              activeConversationId,
+              isResumed: true,
+              activePersona,
+              userAgeTier: (localStorage.getItem("lisa_user_age_tier") as any) || "adult",
+              messages: mappedMessages,
+              onGreetingDelivered: (text) => handleGreetingDeliveredRef.current(text),
+              handleLisaSpeak: (phrase) => handleLisaSpeakRef.current(phrase)
+            });
+          } else {
+            // Check if user has previous conversations to restore session continuity
+            try {
+              const userConvs = await fetchConversations();
+              if (isMounted && userConvs && userConvs.length > 0) {
+                const latest = userConvs[0];
+                if (latest && latest.id && latest.id !== activeConversationId) {
+                  const { messages: latestMsgs } = await fetchConversationMessages(latest.id);
+                  if (isMounted && latestMsgs && latestMsgs.length > 0) {
+                    setActiveConversationId(latest.id);
+                    const mapped = latestMsgs.map((m: any) => ({
+                      id: m.id || String(m.timestamp),
+                      sender: (m.sender === "user" ? "user" : "lisa") as "user" | "lisa",
+                      text: m.text
+                    }));
+                    setMessages(mapped);
+                    messagesRef.current = mapped;
+
+                    // Trigger Smart Greeting for restored conversation
+                    GreetingEngine.evaluateAndTriggerGreeting({
+                      currentUser,
+                      activeConversationId: latest.id,
+                      isResumed: true,
+                      activePersona,
+                      userAgeTier: (localStorage.getItem("lisa_user_age_tier") as any) || "adult",
+                      messages: mapped,
+                      onGreetingDelivered: (text) => handleGreetingDeliveredRef.current(text),
+                      handleLisaSpeak: (phrase) => handleLisaSpeakRef.current(phrase)
+                    });
+                    return;
+                  }
+                }
+              }
+            } catch (convFetchErr) {}
+
+            if (isMounted) {
+              setMessages([]);
+              messagesRef.current = [];
+
+              // Trigger Smart Greeting for fresh activation / new conversation
+              GreetingEngine.evaluateAndTriggerGreeting({
+                currentUser,
+                activeConversationId,
+                isResumed: false,
+                activePersona,
+                userAgeTier: (localStorage.getItem("lisa_user_age_tier") as any) || "adult",
+                messages: [],
+                onGreetingDelivered: (text) => handleGreetingDeliveredRef.current(text),
+                handleLisaSpeak: (phrase) => handleLisaSpeakRef.current(phrase)
+              });
+            }
+          }
         } catch (e) {
-          console.error("Failed to parse voice history for " + currentUser.email, e);
-          setVoiceMessages([]);
-          voiceMessagesRef.current = [];
+          console.error(`[LISA MEMORY] Failed to restore history for ${activeConversationId}:`, e);
+        } finally {
+          if (isMounted) setAppState("idle");
         }
-      } else {
-        setVoiceMessages([]);
-        voiceMessagesRef.current = [];
-      }
-    } else {
-      setVoiceMessages([]);
-      voiceMessagesRef.current = [];
+      };
+      loadConversation();
+      return () => { isMounted = false; };
+    } else if (!currentUser) {
+      setMessages([]);
+      messagesRef.current = [];
     }
-  }, [currentUser]);
+  }, [currentUser, activeConversationId]);
 
   useEffect(() => {
-    voiceMessagesRef.current = voiceMessages;
-    if (currentUser) {
-      localStorage.setItem(`lisa_voice_history_${currentUser.email}`, JSON.stringify(voiceMessages));
-    }
-  }, [voiceMessages, currentUser]);
+    messagesRef.current = messages;
+  }, [messages]);
 
-  // Generate memory-context to feed into Gemini so she remembers everything discussed in previous voice sessions
-  const getVoiceHistoryContextString = useCallback(() => {
-    if (voiceMessages.length === 0) return "";
-    // Pass the last 30 messages in Voice History to remain within token boundaries comfortably
-    const recentVoice = voiceMessages.slice(-30);
-    return recentVoice
-      .map((msg) => `${msg.sender === "user" ? "User Spoke" : "Lisa's Voice Answer"}: "${msg.text}"`)
+  // Unified history context for both Chat and Voice paths
+  const getUnifiedHistoryContextString = useCallback(() => {
+    if (messages.length === 0) return "";
+    const recent = messages.slice(-30);
+    return recent
+      .map((msg) => `${msg.sender === "user" ? "User" : "Lisa"}: "${msg.text}"`)
       .join("\n");
-  }, [voiceMessages]);
+  }, [messages]);
 
   const [isMuted, setIsMuted] = useState(false);
   const [activeMedia, setActiveMedia] = useState<{ type: "youtube" | "spotify"; query: string; videoId?: string | null } | null>(null);
@@ -432,27 +855,64 @@ export default function App() {
 
   // Speaking dynamic phrase helper
   const handleLisaSpeak = useCallback(async (phrase: string) => {
-    if (isMuted) return;
+    if (isMuted) {
+      console.log("[LISA TTS] Skipped because app is muted");
+      return;
+    }
     setAppState("speaking");
     try {
-      const preferredVoiceStr = currentUser ? (localStorage.getItem(`lisa_preferred_voice_${currentUser.email}`) || "Kore") : "Kore";
+      const preferredVoiceStr = getLisaPreferredVoice(currentUser);
+      console.log(`[LISA TTS] Starting TTS with voice: ${preferredVoiceStr}`);
       const audioBase64 = await getLisaAudio(phrase, preferredVoiceStr);
       if (audioBase64) {
         await playPCM(audioBase64);
       } else {
-        // Fallback to browser TTS if no audio returned
-        await speakWithWebSpeech(phrase);
+        console.warn("[LISA TTS] Playback failed: No audio data returned (Gemini TTS quota or limit reached)");
       }
-    } catch (e) {
-      console.error("Speak helper failed, falling back to Web Speech:", e);
+    } catch (e: any) {
+      const safeMsg = e?.message || String(e);
+      console.error(`[LISA TTS] Playback failed: ${safeMsg}`);
+    } finally {
+      setAppState("idle");
+    }
+  }, [isMuted, currentUser]);
+
+  const addMessageToHistory = async (message: ChatMessage) => {
+    if (currentUser) {
       try {
-        await speakWithWebSpeech(phrase);
-      } catch (err) {
-        console.error("Web Speech fallback also failed:", err);
+        await setDoc(doc(db, "users", currentUser.uid, "chatHistory", message.id), message);
+        if (activeConversationId) {
+          await setDoc(doc(db, "users", currentUser.uid, "conversations", activeConversationId, "messages", message.id), {
+            ...message,
+            conversationId: activeConversationId,
+            timestamp: Date.now()
+          });
+        }
+      } catch (e) {
+        console.error("Failed to save message to Firestore history:", e);
       }
     }
-    setAppState("idle");
-  }, [isMuted, currentUser]);
+  };
+
+  const handleGreetingDelivered = useCallback((greetingText: string) => {
+    const greetingMsg: ChatMessage = {
+      id: Date.now().toString() + "-l-greeting",
+      sender: "lisa",
+      text: greetingText
+    };
+    setMessages((prev) => {
+      if (prev.some((m) => m.text === greetingText)) return prev;
+      return [...prev, greetingMsg];
+    });
+    addMessageToHistory(greetingMsg).catch((e) =>
+      console.warn("[LISA GREETING] History sync failed:", e)
+    );
+  }, [activeConversationId, currentUser]);
+
+  useEffect(() => {
+    handleLisaSpeakRef.current = handleLisaSpeak;
+    handleGreetingDeliveredRef.current = handleGreetingDelivered;
+  }, [handleLisaSpeak, handleGreetingDelivered]);
 
   useEffect(() => {
     if (liveSessionRef.current) {
@@ -476,18 +936,6 @@ export default function App() {
     scrollToBottom();
   }, [messages, appState]);
 
-  const addMessageToHistory = async (message: ChatMessage) => {
-    if (currentUser) {
-      await setDoc(doc(db, "users", currentUser.email, "chatHistory", message.id), message);
-    }
-  };
-
-  const addVoiceMessageToHistory = async (message: ChatMessage) => {
-    if (currentUser) {
-      await setDoc(doc(db, "users", currentUser.email, "voiceHistory", message.id), message);
-    }
-  };
-
   const handleTextCommand = useCallback(async (finalTranscript: string) => {
     if (!finalTranscript.trim()) {
       setAppState("idle");
@@ -496,16 +944,82 @@ export default function App() {
 
     const newUserMessage: ChatMessage = { id: Date.now().toString(), sender: "user", text: finalTranscript };
     setMessages((prev) => [...prev, newUserMessage]);
-    await addMessageToHistory(newUserMessage);
-    
+    addMessageToHistory(newUserMessage).catch((e) => console.error("Non-fatal history save error:", e));
+
     // If live session is active, send text through it
     if (isSessionActive && liveSessionRef.current) {
       liveSessionRef.current.sendText(finalTranscript);
       return;
     }
 
-    // Intercept "stop", "roko", "band kro", etc. commands first
+    // Intercept permission confirmation if a computer task is waiting for approval
     const norm = finalTranscript.toLowerCase().trim();
+    if (computerStatus === "waiting_permission" && computerPlan) {
+      const isAffirmative = ["haan", "yes", "proceed", "kar do", "kardo", "theek hai", "sure", "ok", "aage badho", "ha", "bilkul"].some(w => norm.includes(w));
+      const isNegative = ["nahi", "no", "mat karo", "cancel", "rok do", "nahin"].some(w => norm.includes(w));
+      if (isAffirmative || isNegative) {
+        setAppState("processing");
+        const reply = await ComputerAgent.confirmAndResumeTask(isAffirmative, {
+          onStatusChange: (st, pl) => {
+            setComputerStatus(st);
+            if (pl) setComputerPlan({ ...pl });
+          },
+          onStepProgress: (step, idx, total) => {
+            if (computerPlan) setComputerPlan({ ...computerPlan });
+          },
+          onLisaSpeak: async (phrase) => {
+            await handleLisaSpeak(phrase);
+          }
+        }, {
+          uid: currentUser?.uid,
+          userName: currentUser?.name
+        });
+        const replyMsg: ChatMessage = { id: Date.now().toString() + "-l-comp", sender: "lisa", text: reply };
+        setMessages((prev) => [...prev, replyMsg]);
+        addMessageToHistory(replyMsg).catch(console.warn);
+        setAppState("idle");
+        return;
+      }
+    }
+
+    // Intercept Universal Computer / Desktop Control Agent Commands
+    if (ComputerTaskPlanner.isComputerIntent(finalTranscript)) {
+      setAppState("processing");
+      const compRes = await ComputerAgent.processInput(finalTranscript, {
+        onStatusChange: (st, pl) => {
+          setComputerStatus(st);
+          if (pl) setComputerPlan({ ...pl });
+        },
+        onConfirmationRequired: (prompt, pl) => {
+          setComputerStatus("waiting_permission");
+          setComputerPlan({ ...pl });
+        },
+        onStepProgress: (step, idx, total) => {
+          if (computerPlan) setComputerPlan({ ...computerPlan });
+        },
+        onLisaSpeak: async (phrase) => {
+          await handleLisaSpeak(phrase);
+        }
+      }, {
+        uid: currentUser?.uid,
+        userName: currentUser?.name
+      });
+
+      if (compRes.handled) {
+        if (compRes.spokenResponse) {
+          const compMsg: ChatMessage = { id: Date.now().toString() + "-l-comp", sender: "lisa", text: compRes.spokenResponse };
+          setMessages((prev) => {
+            if (prev.some(m => m.text === compRes.spokenResponse)) return prev;
+            return [...prev, compMsg];
+          });
+          addMessageToHistory(compMsg).catch(console.warn);
+        }
+        setAppState("idle");
+        return;
+      }
+    }
+
+    // Intercept "stop", "roko", "band kro", etc. commands first
     const stopWords = ["stop", "roko", "band kro", "band karo", "band kar", "band krdo", "band kar do", "stop song", "stop video", "stop music", "gaana roko", "gana roko", "gaana band", "gana band", "pause song", "gaana band karo", "gana band karo", "gaana band kro", "gana band kro"];
     if (stopWords.some(word => norm.includes(word))) {
       setActiveMedia(null);
@@ -517,7 +1031,7 @@ export default function App() {
       ];
       const responseText = responses[Math.floor(Math.random() * responses.length)];
       setMessages((prev) => [...prev, { id: Date.now().toString() + "-l", sender: "lisa", text: responseText }]);
-      
+
       await handleLisaSpeak(responseText);
       return;
     }
@@ -527,7 +1041,7 @@ export default function App() {
     if (waParams) {
       setAppState("processing");
       const launched = triggerWhatsAppLaunch(waParams.name, waParams.message);
-      
+
       let responseText = "";
       if (launched) {
         responseText = `Haaanji! Maine background me WhatsApp message taiyar kar diya hai. ${waParams.name} ko chala dya hai deep link! 📈🚀`;
@@ -536,7 +1050,7 @@ export default function App() {
       }
 
       setMessages((prev) => [...prev, { id: Date.now().toString() + "-l", sender: "lisa", text: responseText }]);
-      
+
       await handleLisaSpeak(responseText);
       return;
     }
@@ -569,17 +1083,20 @@ export default function App() {
         query: mediaToPlay.query,
         videoId: videoIdToUse
       });
-      
-      const targetUrl = isYt 
-        ? (videoIdToUse ? `https://www.youtube.com/watch?v=${videoIdToUse}` : `https://www.youtube.com/results?search_query=${encodeURIComponent(mediaToPlay.query)}`)
-        : `https://open.spotify.com/search/${encodeURIComponent(mediaToPlay.query)}`;
-      
-      try {
-        window.open(targetUrl, "_blank");
-      } catch (err) {
-        console.error("Popup window blocked", err);
+
+      // Cleanup: We no longer auto-open external tabs if we have a resolved videoId to play in-app
+      if (!isPlayMode) {
+        const targetUrl = isYt
+          ? (videoIdToUse ? `https://www.youtube.com/watch?v=${videoIdToUse}` : `https://www.youtube.com/results?search_query=${encodeURIComponent(mediaToPlay.query)}`)
+          : `https://open.spotify.com/search/${encodeURIComponent(mediaToPlay.query)}`;
+
+        try {
+          window.open(targetUrl, "_blank");
+        } catch (err) {
+          console.error("Popup window blocked", err);
+        }
       }
-      
+
       const responses = !isPlayMode
         ? [
             `Arre! Maine "${mediaToPlay.query}" search kar diya hai YouTube par. Results dekh lijiye! 🔍`,
@@ -600,7 +1117,7 @@ export default function App() {
       // Pick random sassy response for entertainment
       const responseText = responses[Math.floor(Math.random() * responses.length)];
       setMessages((prev) => [...prev, { id: Date.now().toString() + "-l", sender: "lisa", text: responseText }]);
-      
+
       await handleLisaSpeak(responseText);
       return;
     }
@@ -613,7 +1130,7 @@ export default function App() {
     if (commandResult.isBrowserAction) {
       responseText = commandResult.action;
       setMessages((prev) => [...prev, { id: Date.now().toString() + "-l", sender: "lisa", text: responseText }]);
-      
+
       await handleLisaSpeak(responseText);
 
       setTimeout(() => {
@@ -622,24 +1139,125 @@ export default function App() {
         }
       }, 1500);
     } else {
-      // 2. General Chit-Chat via Gemini (incorporating Voice History, custom memory, and camera snapshot if available)
-      const voiceContextStr = getVoiceHistoryContextString();
+      // 2. General Chit-Chat via Gemini (incorporating Unified History, custom memory, persona, topic, and camera snapshot if available)
+      console.log("[LISA CHAT] Request started");
+      const unifiedContextStr = getUnifiedHistoryContextString();
       const customMemoryStr = currentUser ? (localStorage.getItem(`lisa_memory_${currentUser.email}`) || "") : "";
-      responseText = await getLisaResponse(
-        finalTranscript, 
-        messagesRef.current, 
-        currentUser?.name || "", 
-        voiceContextStr, 
-        customMemoryStr,
-        chatCapturedImage || undefined,
-        chatCapturedImage ? "image/jpeg" : undefined
-      );
-      setMessages((prev) => [...prev, { id: Date.now().toString() + "-l", sender: "lisa", text: responseText }]);
-      setChatCapturedImage(null);
-      
-      await handleLisaSpeak(responseText);
+
+      // Check for user-driven persona switch or reset intent in transcript
+      const personaIntent = AdaptivePersonaEngine.detectPersonaIntent(finalTranscript);
+      let turnPersona = activePersona;
+
+      if (personaIntent.intent === "reset_to_default" && personaIntent.persona) {
+        setActivePersona(personaIntent.persona);
+        localStorage.setItem("lisa_active_persona", JSON.stringify(personaIntent.persona));
+        liveSessionRef.current?.updateContext({ activePersona: personaIntent.persona });
+        turnPersona = personaIntent.persona;
+        triggerPersonaToast("Lisa Core Mode", "Sassy & Caring", "Sparkles", "fuchsia");
+      } else if (personaIntent.intent === "persistent_switch" && personaIntent.persona) {
+        setActivePersona(personaIntent.persona);
+        localStorage.setItem("lisa_active_persona", JSON.stringify(personaIntent.persona));
+        liveSessionRef.current?.updateContext({ activePersona: personaIntent.persona });
+        turnPersona = personaIntent.persona;
+        const roleTitle = personaIntent.targetRoleName || personaIntent.persona.role || personaIntent.persona.name;
+        triggerPersonaToast(
+          `${roleTitle} Mode Activated`,
+          personaIntent.persona.domain || "Specialized Role",
+          personaIntent.persona.visualProfile?.icon,
+          personaIntent.persona.visualProfile?.themeColor
+        );
+      } else if (personaIntent.intent === "temporary_override" && personaIntent.persona) {
+        turnPersona = personaIntent.persona;
+        const roleTitle = personaIntent.targetRoleName || personaIntent.persona.role || personaIntent.persona.name;
+        triggerPersonaToast(
+          `${roleTitle} Style (Temporary)`,
+          "Answering in this role style",
+          personaIntent.persona.visualProfile?.icon,
+          personaIntent.persona.visualProfile?.themeColor
+        );
+      }
+
+      try {
+        const startTime = Date.now();
+        analytics.track("message_sent", { feature: "chat", conversationId: activeConversationId });
+
+        if (activeDocument) {
+          analytics.track("document_question", { documentId: activeDocument.documentId, documentType: activeDocument.fileType });
+        }
+
+        const chatResult = await sendLisaMessageWithRetry({
+          prompt: finalTranscript,
+          history: messagesRef.current,
+          userName: currentUser?.name || "",
+          voiceHistoryContext: unifiedContextStr,
+          customMemory: customMemoryStr,
+          image: chatCapturedImage || undefined,
+          mimeType: chatCapturedImage ? "image/jpeg" : undefined,
+          conversationId: activeConversationId,
+          activePersona: turnPersona,
+          currentTopic: currentTopic,
+          maxRetries: 3,
+          activeDocumentId: activeDocument?.documentId,
+          userAgeTier: (localStorage.getItem("lisa_user_age_tier") as any) || "adult"
+        });
+        console.log("[LISA CHAT] /api/gemini/chat response received");
+
+        responseText = chatResult.text || "Ugh, fine. I have nothing to say.";
+        characterManager.setExpression(pickExpressionFromText(responseText));
+        analytics.track("message_completed", {
+          feature: "chat",
+          latency: Date.now() - startTime,
+          success: true,
+          conversationId: activeConversationId
+        });
+
+        // If backend returned an updated persona, synchronize state
+        if (chatResult.updatedPersona) {
+          setActivePersona(chatResult.updatedPersona);
+          localStorage.setItem("lisa_active_persona", JSON.stringify(chatResult.updatedPersona));
+          liveSessionRef.current?.updateContext({ activePersona: chatResult.updatedPersona });
+          analytics.track("persona_activated", { persona: chatResult.updatedPersona.name });
+        }
+
+        const lisaMessage: ChatMessage = { id: Date.now().toString() + "-l", sender: "lisa", text: responseText };
+        setMessages((prev) => [...prev, lisaMessage]);
+        console.log("[LISA CHAT] Assistant message appended to UI");
+
+        console.log("[LISA CHAT] Assistant history sync started");
+        addMessageToHistory(lisaMessage).catch((e) => {
+          console.warn("[LISA CHAT] Assistant history sync failed:", e);
+        });
+
+        setChatCapturedImage(null);
+
+        console.log("[LISA CHAT] TTS started");
+        try {
+          await handleLisaSpeak(responseText);
+          console.log("[LISA CHAT] TTS completed");
+        } catch (ttsError) {
+          console.warn("[LISA CHAT] TTS failed:", ttsError);
+        }
+      } catch (error) {
+        console.error("[LISA CHAT] Request failed:", error);
+        analytics.track("error_occurred", {
+          feature: "chat",
+          errorCategory: "api_failure",
+          error: String(error)
+        });
+        const errorMsgText = typeof error === "object" && error && "message" in error
+          ? (error as any).message
+          : "Uff, mera dimaag kharab ho gaya hai. Try again later!";
+        const errorLisaMessage: ChatMessage = {
+          id: Date.now().toString() + "-l",
+          sender: "lisa",
+          text: `[Error] ${errorMsgText}`
+        };
+        setMessages((prev) => [...prev, errorLisaMessage]);
+      } finally {
+        setAppState("idle");
+      }
     }
-  }, [isMuted, isSessionActive, currentUser, getVoiceHistoryContextString, chatCapturedImage]);
+  }, [isMuted, isSessionActive, currentUser, getUnifiedHistoryContextString, chatCapturedImage, activeConversationId, activePersona, currentTopic]);
 
   useEffect(() => {
     return () => {
@@ -657,29 +1275,79 @@ export default function App() {
         liveSessionRef.current = null;
       }
       setAppState("idle");
+      setConnectionStatus("offline");
       resetLisaSession();
     } else {
       try {
         setIsSessionActive(true);
         resetLisaSession();
-        
-        // Pass voice history context and custom memory to the constructor so Lisa reads it during system instructions
-        const voiceContextStr = getVoiceHistoryContextString();
+
+        // Pass unified history context, custom memory, persona, and conversation context to the manager
+        const unifiedContextStr = getUnifiedHistoryContextString();
         const customMemoryStr = currentUser ? (localStorage.getItem(`lisa_memory_${currentUser.email}`) || "") : "";
-        const preferredVoiceStr = currentUser ? (localStorage.getItem(`lisa_preferred_voice_${currentUser.email}`) || "Kore") : "Kore";
-        const session = new LiveSessionManager(currentUser?.name || "", voiceContextStr, customMemoryStr, preferredVoiceStr);
+        const preferredVoiceStr = getLisaPreferredVoice(currentUser);
+
+        const session = new LiveSessionManager({
+          userName: currentUser?.name || "",
+          voiceHistoryContext: unifiedContextStr,
+          customMemory: customMemoryStr,
+          voice: preferredVoiceStr,
+          conversationId: activeConversationId,
+          activePersona: activePersona,
+          currentTopic: currentTopic
+        });
         session.isMuted = isMuted;
         liveSessionRef.current = session;
-        
+
+        session.onPermissionDenied = () => {
+          console.warn("[LISA LIVE] Microphone permission denied");
+          setShowPermissionModal(true);
+          setIsSessionActive(false);
+          setAppState("idle");
+          if (liveSessionRef.current) {
+            liveSessionRef.current.stop();
+            liveSessionRef.current = null;
+          }
+        };
+
         session.onStateChange = (state) => {
           setAppState(state);
         };
-        
-        session.onMessage = (sender, text) => {
-          // Add to current chat panel
-          setMessages((prev) => [...prev, { id: Date.now().toString() + "-" + sender, sender, text }]);
-          // Also save in Voice History
-          setVoiceMessages((prev) => [...prev, { id: Date.now().toString() + "-v-" + sender, sender, text }]);
+
+        session.onConnectionStatusChange = (status, attempt) => {
+          setConnectionStatus(status);
+          if (attempt !== undefined) {
+            setReconnectAttempt(attempt);
+          }
+        };
+
+        session.onRestored = () => {
+          setConnectionStatus("restored");
+          setTimeout(() => {
+            setConnectionStatus("connected");
+          }, 3500);
+        };
+
+        session.onPersonaChange = (newPersona) => {
+          setActivePersona(newPersona);
+          localStorage.setItem("lisa_active_persona", JSON.stringify(newPersona));
+          const isDefault = newPersona.id === "default";
+          const title = isDefault ? "Lisa Core Mode" : `${newPersona.role || newPersona.name} Mode Activated`;
+          triggerPersonaToast(
+            title,
+            isDefault ? "Sassy & Caring" : (newPersona.domain || "Specialized Role"),
+            newPersona.visualProfile?.icon,
+            newPersona.visualProfile?.themeColor
+          );
+        };
+
+        session.onMessage = async (sender, text) => {
+          // Add to current conversation thread
+          const newMsg: ChatMessage = { id: Date.now().toString() + "-" + sender, sender: sender === "user" ? "user" : "lisa", text };
+          setMessages((prev) => [...prev, newMsg]);
+
+          // Persist all messages from Live session to Firestore immediately for recovery
+          addMessageToHistory(newMsg).catch(e => console.warn("[LISA MEMORY] Failed to sync Live turn:", e));
 
           // Check if user spoke a command to stop the current media
           if (sender === "user") {
@@ -690,7 +1358,15 @@ export default function App() {
             }
           }
         };
-        
+
+        session.onComputerAction = (actionCall: any) => {
+          console.log("🖥️ [LIVE COMPUTER ACTION VISUAL SYNC]", actionCall);
+          const queryText = actionCall.spokenIntent || `${actionCall.appName || ""} ${actionCall.tool || ""}`;
+          const plan = ComputerTaskPlanner.createPlan(queryText);
+          setComputerPlan(plan);
+          setComputerStatus("executing");
+        };
+
         session.onCommand = (url) => {
           if (url.includes("whatsapp")) {
             let phone = "";
@@ -749,10 +1425,14 @@ export default function App() {
 
         await session.start();
       } catch (e) {
-        console.error("Failed to start session", e);
+        console.warn("[LISA LIVE] Failed to start session:", e);
         setShowPermissionModal(true);
         setIsSessionActive(false);
         setAppState("idle");
+        if (liveSessionRef.current) {
+          liveSessionRef.current.stop();
+          liveSessionRef.current = null;
+        }
       }
     }
   };
@@ -760,7 +1440,7 @@ export default function App() {
   const handleTextSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!textInput.trim() && !chatCapturedImage) return;
-    
+
     const finalText = textInput.trim() || "(Look at this picture!)";
     handleTextCommand(finalText);
     setTextInput("");
@@ -771,14 +1451,25 @@ export default function App() {
     <div className="h-[100dvh] w-screen bg-[#070708] text-white flex flex-col items-center justify-between font-sans relative overflow-hidden m-0 p-0">
       {/* Dynamic Login Overlay */}
       {currentUser === null ? (
-        <LoginScreen 
+        <LoginScreen
           onLoginSuccess={(user) => {
             setCurrentUser(user);
             const pinLock = localStorage.getItem(`lisa_pin_lock_${user.email}`) === "true";
             setIsAppUnlocked(!pinLock);
             resetLisaSession();
             setTimeout(() => {
-              handleLisaSpeak(`Aha! Toh tum ho ${user.name}. Baitho baitho, badi der lagayi aane me! Chalo, ab batao kya khichdi pakani hai?`);
+              GreetingEngine.evaluateAndTriggerGreeting({
+                currentUser: user,
+                activeConversationId,
+                isResumed: false,
+                isNewSession: true,
+                force: true,
+                activePersona,
+                userAgeTier: (localStorage.getItem("lisa_user_age_tier") as any) || "adult",
+                messages: messagesRef.current,
+                onGreetingDelivered: handleGreetingDelivered,
+                handleLisaSpeak
+              });
             }, 600);
           }}
           onLisaSpeak={handleLisaSpeak}
@@ -790,7 +1481,19 @@ export default function App() {
         <BiometricLockScreen
           currentUser={currentUser}
           palette={activePalette}
-          onUnlockSuccess={() => setIsAppUnlocked(true)}
+          onUnlockSuccess={() => {
+            setIsAppUnlocked(true);
+            GreetingEngine.evaluateAndTriggerGreeting({
+              currentUser,
+              activeConversationId,
+              isResumed: messages.length > 0,
+              activePersona,
+              userAgeTier: (localStorage.getItem("lisa_user_age_tier") as any) || "adult",
+              messages: messagesRef.current,
+              onGreetingDelivered: handleGreetingDelivered,
+              handleLisaSpeak
+            });
+          }}
           onLisaSpeak={handleLisaSpeak}
         />
       ) : null}
@@ -810,7 +1513,7 @@ export default function App() {
           onUpdateName={(newName) => {
             const updatedUser = { ...currentUser, name: newName };
             setCurrentUser(updatedUser);
-            
+
             // Sync registry
             const list = localStorage.getItem("lisa_registered_users");
             if (list) {
@@ -824,7 +1527,7 @@ export default function App() {
                 console.error("Profile name sync failed", e);
               }
             }
-            
+
             resetLisaSession();
             setTimeout(() => {
               handleLisaSpeak(`Wah re wah! Aaj se tumhara naam ${newName} hua. Sunder hai, chalo ab kaam karo.`);
@@ -848,11 +1551,14 @@ export default function App() {
         />
       )}
 
+      {/* Temporary Persona Activation Toast */}
+      <PersonaActivationToast toast={personaToast} onDismiss={() => setPersonaToast(null)} />
+
       {/* PDF Maker Modal */}
       {isPDFMakerOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setIsPDFMakerOpen(false)} />
-          <motion.div 
+          <motion.div
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 0.95 }}
@@ -868,8 +1574,8 @@ export default function App() {
       )}
 
       {showPermissionModal && (
-        <PermissionModal 
-          onClose={() => setShowPermissionModal(false)} 
+        <PermissionModal
+          onClose={() => setShowPermissionModal(false)}
         />
       )}
 
@@ -957,7 +1663,7 @@ export default function App() {
           </div>
           <div className="flex flex-col justify-center">
             <h1 className="text-xl font-serif font-medium tracking-wide text-white/90 group-hover:text-emerald-400 transition-colors leading-tight">Lisa</h1>
-            <span className="text-[9px] sm:text-[10px] font-sans font-normal text-white/50 tracking-tight leading-none mt-0.5 whitespace-nowrap">
+            <span className="text-[10px] sm:text-[11px] font-sans font-normal tracking-wide text-zinc-400/80 group-hover:text-zinc-300 transition-colors whitespace-nowrap select-none leading-tight mt-0.5">
               Zodiactech Software & IT Services Pvt. Ltd.
             </span>
           </div>
@@ -965,7 +1671,10 @@ export default function App() {
         <div className="flex items-center gap-2">
           {currentUser && (
             <button
-              onClick={() => setShowProfileModal(true)}
+              onClick={() => {
+                setShowProfileModal(true);
+                analytics.track("feature_opened", { feature: "profile_settings" });
+              }}
               className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/5 hover:bg-white/10 active:scale-95 transition-all border border-white/10 text-xs font-mono tracking-wide cursor-pointer"
               title="View Profile Settings"
             >
@@ -984,12 +1693,31 @@ export default function App() {
               <span className="hidden sm:inline max-w-[80px] truncate opacity-80">{currentUser.name}</span>
             </button>
           )}
+          {currentUser && (
+            <button
+              onClick={() => {
+                setIsChatOpen(!isChatOpen);
+                if (!isChatOpen) {
+                  analytics.track("feature_opened", { feature: "lisa_hub" });
+                }
+              }}
+              className={`p-2 rounded-full transition-all border cursor-pointer ${
+                isChatOpen
+                  ? `bg-white/15 text-white ${activePalette.accentBorder}`
+                  : "bg-white/5 text-white/70 hover:bg-white/10 border-white/10"
+              }`}
+              title={isChatOpen ? "Hide Lisa Hub" : "Open Lisa Hub (Chat, History, Personas)"}
+            >
+              <MessageSquare size={18} />
+            </button>
+          )}
           {messages.length > 0 && (
             <button
               onClick={() => {
                 if (confirm("Are you sure you want to clear the chat history?")) {
                   setMessages([]);
                   resetLisaSession();
+                  analytics.track("feature_opened", { feature: "clear_chat" });
                 }
               }}
               className="p-2 rounded-full bg-white/5 hover:bg-red-500/20 hover:text-red-400 transition-colors border border-white/10"
@@ -999,12 +1727,36 @@ export default function App() {
             </button>
           )}
           {currentUser && (
+            <button
+              onClick={() => {
+                setIsDocModalOpen(true);
+                analytics.track("feature_opened", { feature: "document_intelligence" });
+              }}
+              className={`p-2 rounded-full transition-all border cursor-pointer flex items-center justify-center relative ${
+                isDocModalOpen || activeDocument || isStudyOpen || isPDFMakerOpen
+                  ? "bg-cyan-500/20 text-cyan-300 border-cyan-500/40 shadow-[0_0_15px_rgba(6,182,212,0.3)]"
+                  : "bg-white/5 text-white/70 hover:bg-white/10 border-white/10"
+              }`}
+              title="Document & Presentation Hub (Intelligence, Study, Presentations, PDF Maker)"
+            >
+              <FileSearch size={18} />
+              {(activeDocument) && (
+                <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-cyan-400 animate-pulse" />
+              )}
+            </button>
+          )}
+          {currentUser && (
             <div className="relative">
               <button
-                onClick={() => setShowPaletteDropdown(!showPaletteDropdown)}
+                onClick={() => {
+                  setShowPaletteDropdown(!showPaletteDropdown);
+                  if (!showPaletteDropdown) {
+                    analytics.track("feature_opened", { feature: "theme_palette" });
+                  }
+                }}
                 className={`p-2 rounded-full transition-all border cursor-pointer flex items-center justify-center ${
-                  showPaletteDropdown 
-                    ? `bg-white/15 text-white ${activePalette.accentBorder}` 
+                  showPaletteDropdown
+                    ? `bg-white/15 text-white ${activePalette.accentBorder}`
                     : "bg-white/5 text-white/70 hover:bg-white/10 border-white/10"
                 }`}
                 title="Change Color Palette"
@@ -1032,10 +1784,11 @@ export default function App() {
                           onClick={() => {
                             setActivePalette(pal);
                             setShowPaletteDropdown(false);
+                            analytics.track("feature_opened", { feature: `theme_selected_${pal.id}` });
                           }}
                           className={`w-full px-3 py-2 rounded-xl text-left text-xs font-serif transition-colors flex items-center justify-between cursor-pointer ${
-                            isSelected 
-                              ? "bg-white/15 text-white font-medium" 
+                            isSelected
+                              ? "bg-white/15 text-white font-medium"
                               : "text-white/60 hover:bg-white/5 hover:text-white"
                           }`}
                         >
@@ -1052,30 +1805,6 @@ export default function App() {
               </AnimatePresence>
             </div>
           )}
-          {currentUser && (
-            <button
-              onClick={() => setIsStudyOpen(true)}
-              className="p-2 rounded-full bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 hover:text-amber-300 border border-amber-500/20 active:scale-95 transition-all cursor-pointer relative group flex items-center justify-center animate-pulse"
-              style={{ animationDuration: "3s" }}
-              title="Lisa's Study & Handwritten Notes Studio 📝"
-            >
-              <BookOpen size={18} />
-              <span className="absolute -top-1 -right-1 w-2 h-2 bg-rose-500 rounded-full border border-[#020509]" />
-            </button>
-          )}
-          {currentUser && (
-            <button
-              onClick={() => setIsChatOpen(!isChatOpen)}
-              className={`p-2 rounded-full transition-all border cursor-pointer ${
-                isChatOpen 
-                  ? `bg-white/15 text-white ${activePalette.accentBorder}` 
-                  : "bg-white/5 text-white/70 hover:bg-white/10 border-white/10"
-              }`}
-              title={isChatOpen ? "Hide Chat Conversation" : "Show Chat Conversation"}
-            >
-              <MessageSquare size={18} />
-            </button>
-          )}
           <button
             onClick={() => setIsMuted(!isMuted)}
             className="p-2 rounded-full bg-white/5 hover:bg-white/10 transition-colors border border-white/10 animate-fade-in cursor-pointer"
@@ -1090,9 +1819,68 @@ export default function App() {
         </div>
       </header>
 
+      {/* Connection & Auto-Recovery Status Indicator */}
+      <div className="absolute top-[68px] md:top-[76px] left-0 right-0 z-20 pointer-events-auto">
+        <ConnectionStatusBar
+          status={connectionStatus}
+          attempt={reconnectAttempt}
+          maxAttempts={5}
+          onRetry={() => {
+            if (liveSessionRef.current) {
+              liveSessionRef.current.triggerAutoReconnect();
+            } else {
+              toggleListening();
+            }
+          }}
+          personaName={activePersona.name}
+          isVoiceActive={isSessionActive}
+        />
+      </div>
+
+      {/* Subscription Notification Banner */}
+      <AnimatePresence>
+        {subscriptionBanner && (
+          <motion.div
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            className="absolute top-20 left-1/2 -translate-x-1/2 z-30 pointer-events-auto max-w-md w-[90%]"
+          >
+            <div
+              className={`p-3.5 rounded-2xl backdrop-blur-xl border flex items-center justify-between gap-3 shadow-2xl ${
+                subscriptionBanner.type === "activating"
+                  ? "bg-violet-950/80 border-violet-500/40 text-violet-100"
+                  : subscriptionBanner.type === "success"
+                  ? "bg-emerald-950/85 border-emerald-500/50 text-emerald-100"
+                  : "bg-slate-900/90 border-white/20 text-white/80"
+              }`}
+            >
+              <div className="flex items-center gap-2.5 text-xs sm:text-sm font-medium">
+                {subscriptionBanner.type === "activating" && (
+                  <RefreshCw size={16} className="animate-spin text-violet-400 shrink-0" />
+                )}
+                {subscriptionBanner.type === "success" && (
+                  <Crown size={16} className="text-yellow-400 shrink-0" />
+                )}
+                {subscriptionBanner.type === "canceled" && (
+                  <span className="shrink-0">ℹ️</span>
+                )}
+                <span>{subscriptionBanner.message}</span>
+              </div>
+              <button
+                onClick={() => setSubscriptionBanner(null)}
+                className="text-white/50 hover:text-white transition-colors text-xs px-1.5 py-0.5 cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Main Content - Visualizer & Chat */}
       <main className="absolute inset-0 flex flex-row items-center justify-between w-full h-full z-10 overflow-hidden pt-20 pb-24 px-4 md:px-12 pointer-events-none">
-        
+
         {/* Left Column: Lisa Status */}
         <div className="flex w-[30%] lg:w-[25%] h-full flex-col justify-center gap-4 z-10">
           <div className="h-6">
@@ -1173,14 +1961,14 @@ export default function App() {
 
         <AnimatePresence>
           {showTextInput && (
-            <motion.form 
+            <motion.form
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: 20 }}
               onSubmit={handleTextSubmit}
               className={`w-full max-w-md flex items-center gap-2 bg-white/5 border ${activePalette.glassBorder} rounded-full p-1 pl-4 backdrop-blur-md shadow-2xl transition-all duration-300`}
             >
-              <input 
+              <input
                 type="text"
                 value={textInput}
                 onChange={(e) => setTextInput(e.target.value)}
@@ -1188,7 +1976,7 @@ export default function App() {
                 className="flex-1 bg-transparent border-none outline-none text-white placeholder:text-white/30 text-sm"
                 autoFocus
               />
-              <button 
+              <button
                 type="submit"
                 disabled={!textInput.trim() && !chatCapturedImage}
                 className={`p-2 rounded-full ${activePalette.accentBg} text-white disabled:opacity-50 transition-colors`}
@@ -1200,14 +1988,6 @@ export default function App() {
         </AnimatePresence>
 
         <div className="flex items-center gap-4">
-          <button
-            onClick={() => setIsPDFMakerOpen(true)}
-            className={`p-4 rounded-full bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 hover:text-emerald-300 border border-emerald-500/20 transition-all cursor-pointer`}
-            title="Open PDF Maker"
-          >
-            <FileText size={20} />
-          </button>
-
           {currentUser && (
             <button
               onClick={() => {
@@ -1218,8 +1998,8 @@ export default function App() {
                 }
               }}
               className={`p-4 rounded-full transition-all border cursor-pointer ${
-                isChatWebcamActive 
-                  ? "bg-rose-500/25 border-rose-400 text-rose-300 shadow-[0_0_15px_rgba(244,63,94,0.3)]" 
+                isChatWebcamActive
+                  ? "bg-rose-500/25 border-rose-400 text-rose-300 shadow-[0_0_15px_rgba(244,63,94,0.3)]"
                   : `bg-white/5 border ${activePalette.glassBorder} text-white/70 hover:bg-white/10`
               }`}
               title="Toggle Floating Camera Lens (Vision) 👁️"
@@ -1227,7 +2007,7 @@ export default function App() {
               <Camera size={20} className={isChatWebcamActive ? "animate-pulse" : ""} />
             </button>
           )}
-          
+
           {!isSessionActive && (
             <button
               onClick={() => setShowTextInput(!showTextInput)}
@@ -1257,22 +2037,16 @@ export default function App() {
                 <span className="font-serif font-semibold tracking-wider text-sm mt-0.5 uppercase">Lisa Hub</span>
               </div>
               <div className="flex items-center gap-1.5">
-                {(activeTab === "chat" ? messages : voiceMessages).length > 0 && (
+                {messages.length > 0 && (
                   <button
                     onClick={() => {
-                      if (activeTab === "chat") {
-                        if (confirm("Rukko! Kya sach me saari chat history udaani hai?")) {
-                          setMessages([]);
-                          resetLisaSession();
-                        }
-                      } else {
-                        if (confirm("Kya aap saari Voice History (Speak memory) mitaana chahte hain? Isse Lisa purani voice baatein bhool jayegi!")) {
-                          setVoiceMessages([]);
-                        }
+                      if (confirm("Rukko! Kya sach me saari conversation history udaani hai? Lisa sab kuch bhool jayegi!")) {
+                        setMessages([]);
+                        resetLisaSession();
                       }
                     }}
                     className="p-1.5 rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-400 transition-colors cursor-pointer border border-red-500/15"
-                    title={activeTab === "chat" ? "Clear Chat History" : "Clear Voice History"}
+                    title="Clear Everything"
                   >
                     <Trash2 size={13} />
                   </button>
@@ -1287,153 +2061,274 @@ export default function App() {
             </div>
 
             {/* Subheader: Tab Switcher */}
-            <div className={`flex border-b ${activePalette.sidebarBorder} bg-white/[0.01] shrink-0`}>
+            <div className={`flex border-b ${activePalette.sidebarBorder} bg-white/[0.01] shrink-0 overflow-x-auto no-scrollbar`}>
               <button
                 onClick={() => setActiveTab("chat")}
-                className={`flex-1 py-3 text-[10px] font-mono uppercase tracking-widest border-b-2 transition-all flex items-center justify-center gap-2 cursor-pointer ${
+                className={`flex-1 min-w-[70px] py-3 text-[9px] font-mono uppercase tracking-widest border-b-2 transition-all flex flex-col items-center justify-center gap-1 cursor-pointer ${
                   activeTab === "chat"
                     ? `text-white font-semibold bg-white/[0.03]`
-                    : "border-transparent text-white/40 hover:text-white/60 hover:bg-white/[0.005]"
+                    : "border-transparent text-white/40 hover:text-white/60"
                 }`}
                 style={activeTab === "chat" ? { borderBottomColor: activePalette.visColors.listening.color } : {}}
               >
-                <MessageSquare size={12} />
-                <span>Chit-Chat ({messages.length})</span>
+                <MessageSquare size={11} />
+                <span>Chat</span>
+              </button>
+              <button
+                onClick={() => setActiveTab("history")}
+                className={`flex-1 min-w-[70px] py-3 text-[9px] font-mono uppercase tracking-widest border-b-2 transition-all flex flex-col items-center justify-center gap-1 cursor-pointer ${
+                  activeTab === "history"
+                    ? `text-white font-semibold bg-white/[0.03]`
+                    : "border-transparent text-white/40 hover:text-white/60"
+                }`}
+                style={activeTab === "history" ? { borderBottomColor: activePalette.visColors.processing.color } : {}}
+              >
+                <Clock size={11} />
+                <span>History</span>
+              </button>
+              <button
+                onClick={() => setActiveTab("personas")}
+                className={`flex-1 min-w-[70px] py-3 text-[9px] font-mono uppercase tracking-widest border-b-2 transition-all flex flex-col items-center justify-center gap-1 cursor-pointer ${
+                  activeTab === "personas"
+                    ? `text-white font-semibold bg-white/[0.03]`
+                    : "border-transparent text-white/40 hover:text-white/60"
+                }`}
+                style={activeTab === "personas" ? { borderBottomColor: "#a855f7" } : {}}
+              >
+                <UserCheck size={11} />
+                <span>Persona</span>
+              </button>
+              <button
+                onClick={() => setActiveTab("memory")}
+                className={`flex-1 min-w-[70px] py-3 text-[9px] font-mono uppercase tracking-widest border-b-2 transition-all flex flex-col items-center justify-center gap-1 cursor-pointer ${
+                  activeTab === "memory"
+                    ? `text-white font-semibold bg-white/[0.03]`
+                    : "border-transparent text-white/40 hover:text-white/60"
+                }`}
+                style={activeTab === "memory" ? { borderBottomColor: "#f59e0b" } : {}}
+              >
+                <Sparkles size={11} />
+                <span>Memory</span>
               </button>
               <button
                 onClick={() => setActiveTab("voice")}
-                className={`flex-1 py-3 text-[10px] font-mono uppercase tracking-widest border-b-2 transition-all flex items-center justify-center gap-2 cursor-pointer ${
+                className={`flex-1 min-w-[70px] py-3 text-[9px] font-mono uppercase tracking-widest border-b-2 transition-all flex flex-col items-center justify-center gap-1 cursor-pointer ${
                   activeTab === "voice"
                     ? `text-white font-semibold bg-white/[0.03]`
-                    : "border-transparent text-white/40 hover:text-white/60 hover:bg-white/[0.005]"
+                    : "border-transparent text-white/40 hover:text-white/60"
                 }`}
                 style={activeTab === "voice" ? { borderBottomColor: activePalette.visColors.speaking.color } : {}}
               >
-                <Mic size={12} />
-                <span>Voice History ({voiceMessages.length})</span>
+                <Mic size={11} />
+                <span>Voice</span>
               </button>
             </div>
 
+            {/* Fixed Persona Selection (Only when personas tab is active) */}
+            {activeTab === "personas" && (
+              <div className="px-4 py-3 border-b border-white/5 bg-white/[0.01] shrink-0">
+                <form onSubmit={handleHubSynthesizePersona} className="p-3 rounded-xl bg-white/[0.03] border border-white/5 space-y-2">
+                  <label className="text-[10px] font-mono text-zinc-400 uppercase tracking-widest flex items-center gap-2"><Wand2 size={12} className="text-fuchsia-400" /> Adopt Any Persona</label>
+                  <div className="flex gap-2">
+                    <input type="text" value={customPersonaQuery} onChange={(e) => setCustomPersonaQuery(e.target.value)} placeholder="e.g. ICU Nurse, Physics Prof..." className="flex-1 bg-black/40 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-white outline-none" />
+                    <button type="submit" disabled={isSynthesizingPersona} className="px-3 bg-fuchsia-500 rounded-lg text-white text-[10px] font-bold uppercase">{isSynthesizingPersona ? "..." : "ADOPT"}</button>
+                  </div>
+                </form>
+              </div>
+            )}
+
             {/* Dynamic Body Logs based on active tab */}
-            <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-4 scrollbar-hide">
-              {activeTab === "chat" ? (
+            <div className={`flex-1 overflow-y-auto p-4 flex flex-col gap-4 ${activeTab === 'personas' ? 'lisa-scrollbar' : 'scrollbar-hide'}`}>
+              {activeTab === "chat" || activeTab === "voice" ? (
                 messages.length === 0 ? (
                   <div className="flex-1 flex flex-col items-center justify-center text-center p-6 text-white/30 gap-3">
                     <div className={`w-12 h-12 rounded-full border border-dashed border-white/20 flex items-center justify-center ${activePalette.accentText} opacity-60 animate-pulse`}>
                       <MessageSquare size={20} />
                     </div>
-                    <div className="space-y-1">
-                      <p className="font-serif italic text-sm text-white/60">"Chit-Chat khali padi hai..."</p>
-                      <p className="text-xs font-mono max-w-[220px] leading-relaxed mx-auto text-white/40">
-                        Kuch likho ya start session karke voice se baat kijiye! Lisa is text chat ko yaad rakhegi.
-                      </p>
-                    </div>
+                    <p className="text-xs font-mono max-w-[220px] mx-auto text-white/40">
+                      Conversation khali hai... Kuch likho ya voice se baat kijiye!
+                    </p>
                   </div>
                 ) : (
-                  messages.map((msg, idx) => {
+                  (activeTab === "chat" ? messages : messages.filter(m => m.id.includes("-v-") || m.id.includes("voice"))).map((msg, idx) => {
                     const isLisa = msg.sender === "lisa";
+                    const isVoice = msg.id.includes("-v-") || msg.id.includes("voice");
                     return (
-                      <motion.div
-                        key={msg.id || idx}
-                        initial={{ opacity: 0, y: 10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        className={`flex flex-col max-w-[85%] ${
-                          isLisa ? "self-start items-start" : "self-end items-end"
-                        }`}
-                      >
-                        <span className="text-[9px] font-mono uppercase tracking-widest text-white/35 mb-1 px-1">
-                          {isLisa ? "Lisa ✨" : currentUser.name}
+                      <motion.div key={msg.id || idx} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className={`flex flex-col max-w-[85%] ${isLisa ? "self-start items-start" : "self-end items-end"}`}>
+                        <span className={`text-[9px] font-mono uppercase tracking-widest mb-1 px-1 flex items-center gap-1 ${isVoice ? "text-emerald-400/70" : "text-white/35"}`}>
+                          {isLisa ? `Lisa ${isVoice ? "🎙️" : "✨"}` : `${currentUser.name} ${isVoice ? "👤" : ""}`}
                         </span>
-                        
                         <div className="group relative flex items-center gap-2">
-                          <div
-                            className={`rounded-2xl px-4 py-2.5 text-xs sm:text-sm shadow-md leading-relaxed whitespace-pre-wrap break-words ${
-                              isLisa
-                                ? "bg-gradient-to-br from-zinc-900 to-zinc-950 text-white/95 border border-white/5"
-                                : `bg-gradient-to-r ${activePalette.accentGradient} text-white font-medium`
-                            }`}
-                          >
+                          <div className={`rounded-2xl px-4 py-2.5 text-xs sm:text-sm shadow-md leading-relaxed whitespace-pre-wrap break-words ${isLisa ? (isVoice ? "bg-zinc-950/90 text-white border border-zinc-800" : "bg-gradient-to-br from-zinc-900 to-zinc-950 text-white/95 border border-white/5") : (isVoice ? "bg-gradient-to-r from-emerald-950/50 to-teal-950/50 text-emerald-100 border border-emerald-900/30" : `bg-gradient-to-r ${activePalette.accentGradient} text-white`)}`}>
                             {msg.text}
-                          </div>
-
-                          <button
-                            onClick={() => {
-                              setMessages((prev) => prev.filter((m) => m.id !== msg.id));
-                            }}
-                            className="opacity-0 group-hover:opacity-100 p-1.5 rounded-lg bg-black/85 text-red-500 hover:text-red-400 hover:bg-black transition-all absolute top-1/2 -translate-y-1/2 -left-9 cursor-pointer shadow-lg border border-red-500/10"
-                            title="Mitao (Delete Chat Line)"
-                          >
-                            <Trash2 size={11} />
-                          </button>
-                        </div>
-                      </motion.div>
-                    );
-                  })
-                )
-              ) : (
-                voiceMessages.length === 0 ? (
-                  <div className="flex-1 flex flex-col items-center justify-center text-center p-6 text-white/30 gap-3">
-                    <div className={`w-12 h-12 rounded-full border border-dashed border-white/20 flex items-center justify-center text-rose-400 opacity-60 animate-pulse`}>
-                      <Mic size={20} />
-                    </div>
-                    <div className="space-y-1">
-                      <p className="font-serif italic text-sm text-white/60">"Voice History khali hai..."</p>
-                      <p className="text-xs font-mono max-w-[220px] leading-relaxed mx-auto text-white/40">
-                        Start Session karke bolen. Jab aap baat karenge, Lisa voice notes save karegi and next time dynamic summaries se aapko purani baatein yaad dilayegi!
-                      </p>
-                    </div>
-                  </div>
-                ) : (
-                  voiceMessages.map((msg, idx) => {
-                    const isLisa = msg.sender === "lisa";
-                    return (
-                      <motion.div
-                        key={msg.id || idx}
-                        initial={{ opacity: 0, y: 10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        className={`flex flex-col max-w-[85%] ${
-                          isLisa ? "self-start items-start" : "self-end items-end"
-                        }`}
-                      >
-                        <span className="text-[9px] font-mono uppercase tracking-widest text-emerald-400/55 mb-1 px-1 flex items-center gap-1">
-                          <span>{isLisa ? "Lisa (Vocal) 🎙️" : `${currentUser.name} (Vocal) 👤`}</span>
-                        </span>
-                        
-                        <div className="group relative flex items-center gap-2">
-                          <div
-                            className={`rounded-2xl px-4 py-2.5 text-xs sm:text-sm shadow-md leading-relaxed whitespace-pre-wrap break-words border ${
-                              isLisa
-                                ? "bg-zinc-950/90 text-white border-zinc-800"
-                                : "bg-gradient-to-r from-emerald-950/50 to-teal-950/50 text-emerald-100 border-emerald-900/30 font-medium"
-                            }`}
-                          >
-                            {msg.text}
-                          </div>
-
-                          <div className="opacity-0 group-hover:opacity-100 flex flex-col gap-1 absolute top-1/2 -translate-y-1/2 -left-9 transition-all">
-                            <button
-                              onClick={() => handleLisaSpeak(msg.text)}
-                              className="p-1.5 rounded-lg bg-black/85 text-emerald-400 hover:text-emerald-300 hover:bg-black transition-all cursor-pointer shadow-lg border border-emerald-500/10"
-                              title="Sunao (Play)"
-                            >
-                              <Play size={11} />
-                            </button>
-                            <button
-                              onClick={() => {
-                                setVoiceMessages((prev) => prev.filter((m) => m.id !== msg.id));
-                              }}
-                              className="p-1.5 rounded-lg bg-black/85 text-red-500 hover:text-red-400 hover:bg-black transition-all cursor-pointer shadow-lg border border-red-500/10"
-                              title="Memory se mitaayein"
-                            >
-                              <Trash2 size={11} />
-                            </button>
                           </div>
                         </div>
                       </motion.div>
                     );
                   })
                 )
-              )}
+              ) : activeTab === "history" ? (
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="relative flex-1">
+                      <Search size={12} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/30" />
+                      <input
+                        type="text"
+                        value={historySearchQuery}
+                        onChange={(e) => setHistorySearchQuery(e.target.value)}
+                        placeholder="Search chats or topics..."
+                        className="w-full bg-white/5 border border-white/10 rounded-xl pl-9 pr-3 py-1.5 text-[11px] text-white outline-none focus:border-white/20 transition-all"
+                      />
+                    </div>
+                    <button
+                      onClick={() => {
+                        const newId = "conv_" + Date.now();
+                        setActiveConversationId(newId);
+                        setMessages([]);
+                        resetLisaSession();
+                        GreetingEngine.triggerNewConversationGreeting({
+                          currentUser,
+                          conversationId: newId,
+                          activePersona,
+                          userAgeTier: (localStorage.getItem("lisa_user_age_tier") as any) || "adult",
+                          messages: [],
+                          onGreetingDelivered: handleGreetingDelivered,
+                          handleLisaSpeak
+                        });
+                      }}
+                      className="p-2 rounded-xl bg-white/5 hover:bg-white/10 text-white/70 transition-all cursor-pointer"
+                      title="New Chat"
+                    >
+                      <Plus size={14} />
+                    </button>
+                  </div>
+
+                  <div className="space-y-2 max-h-[400px] overflow-y-auto pr-1 lisa-scrollbar">
+                    {filteredConversations.length === 0 ? (
+                      <div className="text-center py-10 text-[11px] text-white/30 italic">No matching history found.</div>
+                    ) : (
+                      filteredConversations.map(conv => (
+                        <div key={conv.id} onClick={() => handleHubSelectConversation(conv.id)} className={`p-3 rounded-xl border transition-all cursor-pointer group ${conv.id === activeConversationId ? `bg-white/10 ${activePalette.accentBorder}` : "bg-white/[0.03] border-white/5 hover:bg-white/[0.06]"}`}>
+                          <div className="flex items-center justify-between mb-1">
+                            <span className="text-xs font-semibold text-white truncate max-w-[170px]">{conv.title || "Untitled Session"}</span>
+                            <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                              <button onClick={(e) => { e.stopPropagation(); handleHubDeleteConversation(conv.id); }} className="p-1 text-white/40 hover:text-red-400"><Trash2 size={11} /></button>
+                            </div>
+                          </div>
+
+                          {conv.summary && (
+                            <div className="text-[10px] text-white/40 line-clamp-1 mb-2 italic">
+                              {conv.summary}
+                            </div>
+                          )}
+
+                          <div className="flex flex-wrap gap-1 mb-2">
+                            {conv.topics?.slice(0, 3).map((t, idx) => (
+                              <span key={idx} className="px-1.5 py-0.5 rounded-md bg-white/5 border border-white/5 text-[8px] text-white/50 uppercase tracking-tight">
+                                {t}
+                              </span>
+                            ))}
+                          </div>
+
+                          <div className="flex items-center justify-between text-[9px] text-white/30 font-mono">
+                            <div className="flex items-center gap-2">
+                              <span>{formatHubTimestamp(conv.updatedAt)}</span>
+                              {conv.messageCount && <span>• {conv.messageCount} msgs</span>}
+                            </div>
+                            {conv.activePersona && (
+                              <span className="text-fuchsia-400/60 uppercase">{conv.activePersona.name}</span>
+                            )}
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+              ) : activeTab === "personas" ? (
+                <div className="space-y-2 max-h-[400px] overflow-y-auto pr-1 lisa-scrollbar">
+                  <div className="grid grid-cols-1 gap-2">
+                    {Object.values(ARCHETYPE_CATALOG).map(p => (
+                      <div
+                        key={p.id}
+                        onClick={() => {
+                          setActivePersona(p);
+                          localStorage.setItem("lisa_active_persona", JSON.stringify(p));
+                          if (liveSessionRef.current) liveSessionRef.current.updateContext({ activePersona: p });
+                          const isDefault = p.id === "default";
+                          triggerPersonaToast(
+                            isDefault ? "Lisa Core Mode" : `${p.role || p.name} Mode Activated`,
+                            isDefault ? "Sassy & Caring" : (p.domain || "Specialized Role"),
+                            p.visualProfile?.icon,
+                            p.visualProfile?.themeColor
+                          );
+                        }}
+                        className={`p-2.5 rounded-xl border transition-all cursor-pointer flex items-center gap-3 ${activePersona.id === p.id ? `bg-white/10 ${activePalette.accentBorder}` : "bg-white/[0.03] border-white/5 hover:bg-white/[0.06]"}`}
+                      >
+                        <div className="p-2 rounded-lg bg-white/5 border border-white/10">{getHubPersonaIcon(p.id, p.icon)}</div>
+                        <div className="min-w-0">
+                          <div className="text-[11px] font-bold text-white truncate">{p.name}</div>
+                          <div className="text-[9px] text-zinc-500 line-clamp-1">{p.roleDescription}</div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : activeTab === "memory" ? (
+                <div className="space-y-4">
+                  <div className="p-3 rounded-xl bg-gradient-to-br from-amber-500/10 to-amber-600/5 border border-amber-500/20 text-[10px] text-amber-200/80 leading-relaxed flex items-start gap-3">
+                    <Brain size={14} className="text-amber-400 shrink-0 mt-0.5" />
+                    <div>
+                      <p className="font-bold text-amber-400 mb-0.5">Permanent Memory Active</p>
+                      Lisa extracts key facts, preferences, and goals from chats to remember you across sessions.
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="relative flex-1">
+                      <Search size={12} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/30" />
+                      <input
+                        type="text"
+                        value={memorySearchQuery}
+                        onChange={(e) => setMemorySearchQuery(e.target.value)}
+                        placeholder="Search your memories..."
+                        className="w-full bg-white/5 border border-white/10 rounded-xl pl-9 pr-3 py-1.5 text-[11px] text-white outline-none focus:border-white/20 transition-all"
+                      />
+                    </div>
+                    <button onClick={handleHubDeleteAllFacts} className="p-2 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-400 transition-all" title="Clear All Memory"><RotateCcw size={14} /></button>
+                  </div>
+
+                  <form onSubmit={handleHubAddFact} className="flex gap-2">
+                    <input type="text" value={newFactInput} onChange={(e) => setNewFactInput(e.target.value)} placeholder="Add a fact to remember..." className="flex-1 bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-white/20" />
+                    <button type="submit" disabled={isAddingFact} className="px-4 bg-white/10 hover:bg-white/15 rounded-xl text-white text-[10px] font-bold uppercase tracking-wider transition-all">ADD</button>
+                  </form>
+
+                  <div className="space-y-2 max-h-[350px] overflow-y-auto pr-1 lisa-scrollbar">
+                    {filteredFacts.length === 0 ? (
+                      <div className="text-center py-10 text-[11px] text-white/30 italic">No matching memories found.</div>
+                    ) : (
+                      filteredFacts.map(f => (
+                        <div key={f.id} className="p-3 rounded-xl bg-white/[0.03] border border-white/5 flex items-start justify-between gap-3 group hover:bg-white/[0.05] transition-all">
+                          <div className="flex-1 min-w-0">
+                            <div className="text-[11px] text-white/90 leading-normal">{f.content}</div>
+                            <div className="mt-1.5 flex items-center gap-2">
+                              <span className={`px-1.5 py-0.5 rounded-md text-[8px] font-bold uppercase tracking-tighter ${
+                                f.category === 'profile' ? 'bg-blue-500/20 text-blue-300' :
+                                f.category === 'project' ? 'bg-emerald-500/20 text-emerald-300' :
+                                f.category === 'preference' ? 'bg-amber-500/20 text-amber-300' :
+                                'bg-zinc-500/20 text-zinc-300'
+                              }`}>
+                                {f.category || 'other'}
+                              </span>
+                              <span className="text-[8px] text-white/20 font-mono">{formatHubTimestamp(f.createdAt)}</span>
+                            </div>
+                          </div>
+                          <button onClick={() => handleHubDeleteFact(f.id)} className="opacity-0 group-hover:opacity-100 text-white/20 hover:text-red-400 transition-all shrink-0"><Trash2 size={12} /></button>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+              ) : null}
               <div ref={messagesEndRef} />
             </div>
 
@@ -1450,8 +2345,8 @@ export default function App() {
                     }
                   }}
                   className={`p-2 rounded-xl border cursor-pointer transition-all flex items-center justify-center shrink-0 ${
-                    isChatWebcamActive 
-                      ? "bg-rose-500/15 border-rose-500 text-rose-400 animate-pulse" 
+                    isChatWebcamActive
+                      ? "bg-rose-500/15 border-rose-500 text-rose-400 animate-pulse"
                       : "bg-white/[0.03] border-white/5 text-white/50 hover:text-white"
                   }`}
                   title="Toggle Camera"
@@ -1486,6 +2381,18 @@ export default function App() {
         palette={activePalette}
         userName={currentUser?.name || "Student"}
       />
+
+      <AnimatePresence>
+        {activeMedia && (
+          <MediaWidget
+            type={activeMedia.type}
+            query={activeMedia.query}
+            videoId={activeMedia.videoId}
+            palette={activePalette}
+            onClose={() => setActiveMedia(null)}
+          />
+        )}
+      </AnimatePresence>
 
       {/* WhatsApp Linker Quick Popup Modal / Prompter Overlay */}
       <AnimatePresence>
@@ -1583,6 +2490,102 @@ export default function App() {
           </div>
         )}
       </AnimatePresence>
+
+      <DocumentInspectorModal
+        isOpen={isDocModalOpen}
+        onClose={() => setIsDocModalOpen(false)}
+        activeDocument={activeDocument}
+        onDocumentLoaded={(doc) => {
+          setActiveDocument(doc);
+          setIsDocModalOpen(false);
+          analytics.track("document_processed", { feature: "documents", fileType: doc.fileType, success: true });
+          setMessages(prev => [...prev, {
+            id: Date.now().toString(),
+            sender: "lisa",
+            text: `📄 Successfully uploaded & analyzed "${doc.fileName}" (${doc.fileType})! Summary: ${doc.summary}. You can now ask me any follow-up questions about this document!`
+          }]);
+        }}
+        parseDocument={async (fileData, fileName, fileType, mimeType) => {
+          analytics.track("document_uploaded", { feature: "documents", fileName, fileType });
+          const startTime = Date.now();
+          try {
+            const res = await parseDocumentApi(fileData, fileName, fileType, mimeType, activeConversationId);
+            if (!res) {
+              analytics.track("error_occurred", { feature: "documents", errorCategory: "parse_failure" });
+            }
+            return res;
+          } catch (e) {
+            analytics.track("error_occurred", { feature: "documents", errorCategory: "parse_exception", error: String(e) });
+            throw e;
+          }
+        }}
+        activePalette={activePalette}
+        userName={currentUser?.name || "Guest"}
+      />
+
+      <ComputerAgentWidget
+        plan={computerPlan}
+        status={computerStatus}
+        palette={activePalette}
+        onConfirm={async (approved) => {
+          setAppState("processing");
+          const reply = await ComputerAgent.confirmAndResumeTask(approved, {
+            onStatusChange: (st, pl) => {
+              setComputerStatus(st);
+              if (pl) setComputerPlan({ ...pl });
+            },
+            onStepProgress: (step, idx, total) => {
+              if (computerPlan) setComputerPlan({ ...computerPlan });
+            },
+            onLisaSpeak: async (phrase) => {
+              await handleLisaSpeak(phrase);
+            }
+          }, {
+            uid: currentUser?.uid,
+            userName: currentUser?.name
+          });
+          const replyMsg: ChatMessage = { id: Date.now().toString() + "-l-comp", sender: "lisa", text: reply };
+          setMessages((prev) => [...prev, replyMsg]);
+          addMessageToHistory(replyMsg).catch(console.warn);
+          setAppState("idle");
+        }}
+        onCancel={() => {
+          ComputerAgent.cancelTask({
+            onStatusChange: (st, pl) => {
+              setComputerStatus(st);
+              if (pl) setComputerPlan({ ...pl });
+            },
+            onLisaSpeak: async (phrase) => {
+              await handleLisaSpeak(phrase);
+            }
+          });
+        }}
+        onResume={async () => {
+          setAppState("processing");
+          const res = await ComputerAgent.resumeInterruptedTask({
+            onStatusChange: (st, pl) => {
+              setComputerStatus(st);
+              if (pl) setComputerPlan({ ...pl });
+            },
+            onLisaSpeak: async (phrase) => {
+              await handleLisaSpeak(phrase);
+            }
+          }, {
+            uid: currentUser?.uid,
+            userName: currentUser?.name
+          });
+          if (res.response) {
+            const resumeMsg: ChatMessage = { id: Date.now().toString() + "-l-comp", sender: "lisa", text: res.response };
+            setMessages((prev) => [...prev, resumeMsg]);
+            addMessageToHistory(resumeMsg).catch(console.warn);
+          }
+          setAppState("idle");
+        }}
+        onClose={() => {
+          setComputerPlan(null);
+          setComputerStatus("idle");
+        }}
+      />
     </div>
   );
 }

@@ -8,27 +8,38 @@ export interface WhatsAppContact {
   phone: string; // Phone number with country code (e.g. "+919876543210")
 }
 
-// Default directory seeds so Soni is immediately present
-const DEFAULT_CONTACTS: WhatsAppContact[] = [
-  { id: "seed-1", name: "Soni", phone: "+919876543210" },
-  { id: "seed-2", name: "Papa", phone: "" },
-  { id: "seed-3", name: "Mummy", phone: "" },
-  { id: "seed-4", name: "", phone: "" },
-];
+// Default directory seeds removed for production
+const DEFAULT_CONTACTS: WhatsAppContact[] = [];
 
 /**
  * Fetch list of registered WhatsApp contacts from Local Storage
  */
 export function getWhatsAppContacts(email: string): WhatsAppContact[] {
-  if (!email) return DEFAULT_CONTACTS;
+  if (!email) return [];
   const raw = localStorage.getItem(`lisa_wa_contacts_${email.toLowerCase().trim()}`);
+
+  let contacts: WhatsAppContact[] = [];
   if (!raw) {
-    // Seed initial ones on first retrieval
-    saveWhatsAppContacts(email, DEFAULT_CONTACTS);
     return DEFAULT_CONTACTS;
   }
+
   try {
-    return JSON.parse(raw);
+    contacts = JSON.parse(raw);
+
+    // MIGRATION: Remove any legacy demo/seed contacts from previous versions
+    const demoNames = ["soni", "papa", "mummy", "brother"];
+    const cleaned = contacts.filter(c =>
+      !c.id.startsWith("seed-") &&
+      !c.id.startsWith("sync-") &&
+      !demoNames.includes(c.name.toLowerCase().trim())
+    );
+
+    if (cleaned.length !== contacts.length) {
+      saveWhatsAppContacts(email, cleaned);
+      return cleaned;
+    }
+
+    return contacts;
   } catch (e) {
     console.error("Failed to parse WhatsApp contacts", e);
     return DEFAULT_CONTACTS;
@@ -49,7 +60,7 @@ export function saveWhatsAppContacts(email: string, contacts: WhatsAppContact[])
 export function linkWhatsAppContact(email: string, name: string, phone: string): WhatsAppContact[] {
   const contacts = getWhatsAppContacts(email);
   const targetName = name.trim().toLowerCase();
-  
+
   // Clean phone input - strip spaces, keep + symbol
   const cleanedPhone = phone.trim().replace(/[\s\-]/g, "");
 
@@ -69,7 +80,7 @@ export function linkWhatsAppContact(email: string, name: string, phone: string):
 
 /**
  * Parse Roman Hindi & English message intents regarding WhatsApp.
- * Handles inputs like: 
+ * Handles inputs like:
  * - "soni ko message bhejo ki khana kha liya"
  * - "whatsapp par papa ko send kro ki call me"
  * - "send message to mummy saying pick me up"
@@ -142,7 +153,7 @@ export function getWhatsAppUrl(phone: string, text: string): string {
     // If no phone is provided, return standard Universal Share link allowing contact-picker inside WhatsApp
     return `https://api.whatsapp.com/send?text=${encText}`;
   }
-  
+
   // Strip non-numeric characters for absolute robust dialing, but preserve +
   const cleanedPhone = phone.trim().replace(/[^\d\+]/g, "").replace(/^\+/, "");
   return `https://api.whatsapp.com/send?phone=${cleanedPhone}&text=${encText}`;
@@ -150,16 +161,8 @@ export function getWhatsAppUrl(phone: string, text: string): string {
 
 /**
  * Simulates fetching contacts from a shared browser storage/service.
+ * Now only returns existing contacts to avoid injecting demo data.
  */
 export function syncWhatsAppContacts(email: string): WhatsAppContact[] {
-  // Mock data representing a fetched sync list
-  const MOCK_SYNCED_CONTACTS: WhatsAppContact[] = [
-    { id: "sync-1", name: "Soni", phone: "+919876543210" },
-    { id: "sync-2", name: "Papa", phone: "+919999999999" },
-    { id: "sync-3", name: "Mummy", phone: "+918888888888" },
-    { id: "sync-4", name: "Friend", phone: "+917777777777" },
-  ];
-
-  saveWhatsAppContacts(email, MOCK_SYNCED_CONTACTS);
-  return MOCK_SYNCED_CONTACTS;
+  return getWhatsAppContacts(email);
 }

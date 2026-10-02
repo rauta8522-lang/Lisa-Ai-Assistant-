@@ -1,6 +1,6 @@
 {
-  "name": " Lisa - AI Voice Assistant",
-  "description": "A sassy, witty, and intelligent Indian female AI voice assistant.",
+  "name": "Lisa - AI Voice Assistant",
+  "description": "A sassy, witty, and intelligent Indian female AI voice assistant with persistent conversation memory and human-like voice.",
   "requestFramePermissions": [
     "microphone",
     "camera"

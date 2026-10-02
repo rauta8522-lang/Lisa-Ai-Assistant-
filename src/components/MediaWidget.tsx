@@ -1,7 +1,7 @@
-import React, { useState } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { motion } from "framer-motion";
-import { 
-  X, Youtube, Music, Radio, Minimize2, Maximize2, 
+import {
+  X, Youtube, Music, Radio, Minimize2, Maximize2,
   ExternalLink, Search, Disc, Play, Square, Volume2
 } from "lucide-react";
 import { ThemePalette } from "../utils/theme";
@@ -21,13 +21,47 @@ export default function MediaWidget({ type, query, videoId, palette, onClose }: 
   const [activeType, setActiveType] = useState<"youtube" | "spotify">(type);
   const [searchInputValue, setSearchInputValue] = useState("");
   const [currentWidgetKey, setCurrentWidgetKey] = useState(0); // For forcing iframe reloads on search
+  const iframeRef = useRef<HTMLIFrameElement>(null);
 
   // URL Resolvers
   // If specific videoId is provided, play it directly, otherwise fallback to list search
   const youtubeEmbedUrl = currentVideoId
-    ? `https://www.youtube.com/embed/${currentVideoId}?autoplay=1&mute=0&enablejsapi=1`
-    : `https://www.youtube.com/embed?listType=search&list=${encodeURIComponent(currentQuery)}&autoplay=1&mute=0&enablejsapi=1`;
+    ? `https://www.youtube.com/embed/${currentVideoId}?autoplay=1&mute=0&enablejsapi=1&origin=${window.location.origin}`
+    : `https://www.youtube.com/embed?listType=search&list=${encodeURIComponent(currentQuery)}&autoplay=1&mute=0&enablejsapi=1&origin=${window.location.origin}`;
   const spotifyEmbedUrl = `https://open.spotify.com/embed/search?q=${encodeURIComponent(currentQuery)}`;
+
+  // Deterministic Playback Trigger (Retry loop for YouTube API)
+  useEffect(() => {
+    if (activeType === "youtube" && (currentVideoId || currentQuery)) {
+      let retryCount = 0;
+      const maxRetries = 5;
+
+      const triggerPlay = () => {
+        if (iframeRef.current && iframeRef.current.contentWindow) {
+          try {
+            iframeRef.current.contentWindow.postMessage(
+              JSON.stringify({ event: "command", func: "playVideo", args: "" }),
+              "*"
+            );
+          } catch (e) {
+            console.error("Failed to send play command:", e);
+          }
+        }
+
+        if (retryCount < maxRetries) {
+          retryCount++;
+          setTimeout(triggerPlay, 1500); // Retry every 1.5s
+        }
+      };
+
+      // Initial delay to let iframe load
+      const timer = setTimeout(triggerPlay, 2500);
+      return () => {
+        clearTimeout(timer);
+        retryCount = maxRetries; // Stop recursion on cleanup
+      };
+    }
+  }, [currentVideoId, currentQuery, activeType, currentWidgetKey]);
 
   const handleInlineSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -61,12 +95,12 @@ export default function MediaWidget({ type, query, videoId, palette, onClose }: 
       animate={{ opacity: 1, scale: 1, y: 0 }}
       exit={{ opacity: 0, scale: 0.9, y: 50 }}
       className={`fixed z-40 ${
-        isMinimized 
-          ? "w-72 h-14" 
+        isMinimized
+          ? "w-72 h-14"
           : "w-80 sm:w-96 h-[380px]"
       } bg-zinc-950/90 border border-white/10 rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.8)] backdrop-blur-xl flex flex-col overflow-hidden pointer-events-auto select-none`}
-      style={{ 
-        bottom: "85px", 
+      style={{
+        bottom: "85px",
         left: "20px",
         touchAction: "none" // Prevents default browser scroll while dragging
       }}
@@ -179,21 +213,21 @@ export default function MediaWidget({ type, query, videoId, palette, onClose }: 
       ) : (
         /* MAXIMIZED VIEW STATE */
         <div className="flex-1 flex flex-col min-h-0 bg-black/40">
-          
+
           {/* Direct Input Search Bar in player */}
-          <form 
-            onSubmit={handleInlineSearchSubmit} 
+          <form
+            onSubmit={handleInlineSearchSubmit}
             className="flex items-center h-9 border-b border-white/5 bg-white/[0.01] px-2.5 gap-2 shrink-0 pointer-events-auto"
           >
             <Search size={11} className="text-white/40 shrink-0" />
-            <input 
+            <input
               type="text"
               value={searchInputValue}
               onChange={(e) => setSearchInputValue(e.target.value)}
               placeholder={`Search another song on ${activeType === "youtube" ? "YouTube" : "Spotify"}...`}
               className="flex-1 bg-transparent border-none outline-none text-[10px] text-white placeholder-white/20"
             />
-            <button 
+            <button
               type="submit"
               disabled={!searchInputValue.trim()}
               className="px-2 py-1 rounded bg-white/5 hover:bg-white/10 text-white/80 text-[8px] font-mono tracking-wider uppercase disabled:opacity-30 cursor-pointer shrink-0 transition-opacity"
@@ -206,6 +240,7 @@ export default function MediaWidget({ type, query, videoId, palette, onClose }: 
           <div className="flex-1 w-full bg-black/80 flex items-center justify-center relative select-none">
             {activeType === "youtube" ? (
               <iframe
+                ref={iframeRef}
                 key={`yt-${currentQuery}-${currentWidgetKey}`}
                 src={youtubeEmbedUrl}
                 title="YouTube Video Player"
@@ -215,6 +250,7 @@ export default function MediaWidget({ type, query, videoId, palette, onClose }: 
               />
             ) : (
               <iframe
+                ref={iframeRef}
                 key={`sp-${currentQuery}-${currentWidgetKey}`}
                 src={spotifyEmbedUrl}
                 title="Spotify Music Player"

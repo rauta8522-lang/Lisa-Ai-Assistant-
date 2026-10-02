@@ -1,10 +1,10 @@
 import React, { useState, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { 
-  X, Sparkles, BookOpen, Upload, Download, Copy, Check, 
-  RefreshCw, Award, ArrowUpRight, HelpCircle, PenTool, Highlighter, 
+import {
+  X, Sparkles, BookOpen, Upload, Download, Copy, Check,
+  RefreshCw, Award, ArrowUpRight, HelpCircle, PenTool, Highlighter,
   Trash2, Layers, AlertCircle, Plus, Eye, ChevronRight, FileText,
-  Camera, Video
+  Camera, Video, Edit3, FileSearch
 } from "lucide-react";
 import { ThemePalette } from "../utils/theme";
 import { auth, db } from "../config/firebase";
@@ -62,139 +62,18 @@ interface GeneratedNote {
   summary: string;
 }
 
-// Initial demo notes so the studio loads with rich content immediately!
-const DEMO_NOTE: GeneratedNote = {
-  topicName: "Thermodynamics - Heat Engines & Laws",
-  subject: "Mechanical Engineering / Physics",
-  gradeStandard: "University Exam Prep",
-  introduction: "In classical thermodynamics, a heat engine is a system that converts heat or thermal energy to mechanical work, which it then delivers by bringing a working substance from a higher state temperature to a lower state temperature.",
-  definition: "A system that converts heat into mechanical energy by undergoing a cyclic process. The thermal efficiency (η) is defined as:\n\nη = W / QH = (QH - QC) / QH = 1 - (QC / QH)",
-  keyConcepts: "1. Heat Absorption: Working substance absorbs heat (QH) from a high-temperature reservoir.\n2. Work Output: Thermodynamic expansion does useful mechanical work (W).\n3. Heat Rejection: Residual unused heat (QC) is dumped to a low-temperature sink.",
-  importantPoints: [
-    "Operates strictly under cyclic paths, returning to its initial state.",
-    "Thermal efficiency can never reach 100% as restricted by the Second Law of Thermodynamics (Kelvin-Planck statement).",
-    "Carnot cycle defines the maximum theoretical upper bound of thermal efficiency.",
-    "Irreversibilities like friction and turbulence always reduce practical efficiency."
-  ],
-  detailedExplanation: "A heat engine works by transferring energy from a warm source to a cold sink and converting a portion of this energy to mechanical work. This sequence of steps is repeated in cycles. The working substance (such as vapor or fuel-air mixture) expands, pushing a piston or spinning a turbine rotor, thereby transferring kinetic energy to mechanical output. The maximum possible efficiency of any such heat engine is dictated by the Carnot limit, which depends purely on the absolute temperatures of the source and the sink.",
-  diagrams: [
-    {
-      title: "Heat Engine Energy Flow Schematic",
-      asciiDiagram: `       Source (QH)
-            │
-            │ QH
-            ▼
-      ┌───────────┐
-      │  Engine   │ ═════► Work (W)
-      └───────────┘
-            │
-            │ QC
-            ▼
-        Sink (QC)`
-    }
-  ],
-  flowchartsText: `Thermodynamic Energy Flow
-│
-├── Absorbs QH (High Temp Source)
-│
-├── Converts portion to Work (W = QH - QC)
-│
-└── Rejects waste QC to cold Sink`,
-  importantTable: {
-    headers: ["Feature", "Open System", "Closed System"],
-    rows: [
-      ["Mass Transfer", "Yes", "No"],
-      ["Energy Transfer", "Yes", "Yes"],
-      ["Examples", "Turbines, Pumps", "Piston Cylinder without valves"]
-    ]
-  },
-  keyFacts: [
-    "Sadi Carnot is regarded as the father of modern thermodynamics.",
-    "Efficiency depends only on source temperature and sink temperature.",
-    "An absolute zero thermodynamic sink is practically impossible to achieve."
-  ],
-  previousYearQuestions: [
-    "State Second Law of Thermodynamics and outline Kelvin-Planck Statement with respect to Heat Engines. (10 Marks, 2024 Exam)",
-    "Derive the efficiency expression for an ideal Carnot Cycle. (10 Marks, 2023 Exam)"
-  ],
-  vivaQuestions: [
-    {
-      question: "Q1. What is Thermodynamics?",
-      answer: "Ans. Thermodynamics is the science dealing with heat and work interactions."
-    },
-    {
-      question: "Q2. Can a real heat engine have 100% efficiency?",
-      answer: "Ans. No, according to Kelvin-Planck statement, some portion of heat must be rejected to a low-temperature sink."
-    },
-    {
-      question: "Q3. What is a sink in thermodynamic terms?",
-      answer: "Ans. A sink is a thermal reservoir at lower temperature capable of absorbing infinite heat with no change in its temperature."
-    },
-    {
-      question: "Q4. What is the efficiency formula of Carnot engine?",
-      answer: "Ans. Efficiency η = 1 - (T_C / T_H), where temperatures are strictly in Kelvin scale."
-    },
-    {
-      question: "Q5. State Kelvin-Planck Statement.",
-      answer: "Ans. It is impossible to construct a device operating in a cycle whose sole effect is to extract heat from a single reservoir and produce equivalent net work."
-    }
-  ],
-  fiveMarksQuestions: [
-    {
-      question: "Q1. Explain Heat Engine.",
-      answer: "A heat engine is a device operating in a thermodynamic cycle, receiving heat from a high-temperature reservoir, converting a portion of it into work, and rejecting the remaining portion to a low-temperature reservoir.",
-      importantPoints: [
-        "Consists of a source, sink, and working substance.",
-        "Energy is conserved at all times (QH = W + QC).",
-        "W represents net work delivered out of the system."
-      ],
-      diagram: `       QH
-       ↓
- ┌─────────┐
- │ Engine  │
- └─────────┘
-       ↓ W
-       ↓
-      QC`
-    }
-  ],
-  tenMarksQuestions: [
-    {
-      question: "Q1. Explain Classification of Animal Kingdom (or Carnot Cycle Operation).",
-      detailedAnswer: "To understand biological or physical system classifications, we group items systematically. For instance, the Animal Kingdom is classified hierarchically depending on structural complexity and symmetry. First, organisms are classified into Non-Chordata and Chordata based on the absence or presence of a notochord. Similarly, in physical cycles, engines are structured under power cycles or refrigeration cycles to categorize efficiency.",
-      stepByStepExplanation: "1. Phase 1: Cell division and tissue differentiation.\n2. Phase 2: Organ system development.\n3. Phase 3: Symmetry formation (Radial vs Bilateral).\n4. Phase 4: Coelom configuration (Pseudocoelomate vs Coelomate).",
-      importantExamPoints: [
-        "Remember to highlight the unique water vascular system in Echinodermata.",
-        "Nerve cord in non-chordates is double, ventral and solid, whereas in chordates it is single, dorsal and hollow."
-      ],
-      flowchart: `Animal Kingdom
-│
-├── Non-Chordata
-│
-└── Chordata
-    ├── Pisces
-    ├── Amphibia
-    ├── Reptilia
-    ├── Aves
-    └── Mammalia`
-    }
-  ],
-  examNotes: [
-    "Keep Carnot efficiency equation T_C / T_H units strictly in Kelvin! Do not use Celsius directly.",
-    "Work output is positive when heat flows from hot to cold environment."
-  ],
-  summary: "Thermodynamics operates on heat engine transformations converting energy sources to output works via cyclic paths of compression, heating, expansion, and cooling."
-};
+// Initial demo notes removed for production.
+
 
 export default function StudyStudio({ isOpen, onClose, palette, userName }: StudyStudioProps) {
   const [activeTab, setActiveTab] = useState<"create" | "pyq" | "scan" | "savedNotes">("create");
-  
+
   // Input states
   const [topicInput, setTopicInput] = useState("");
   const [pyqQuery, setPyqQuery] = useState("");
   const [marksType, setMarksType] = useState<"5" | "10">("5");
-  const [subjectType, setSubjectType] = useState("Engineering Sciences");
-  
+  const [subjectType, setSubjectType] = useState("");
+
   // File Upload states
   const [file, setFile] = useState<File | null>(null);
   const [fileType, setFileType] = useState<string>("");
@@ -243,7 +122,7 @@ export default function StudyStudio({ isOpen, onClose, palette, userName }: Stud
       ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
       const dataUrl = canvas.toDataURL("image/jpeg", 0.9);
       const base64Str = dataUrl.split(",")[1];
-      
+
       setFile(new File([new Blob()], "snapped_question.jpg", { type: "image/jpeg" }));
       setFileBase64(base64Str);
       setFileType("image/jpeg");
@@ -266,7 +145,7 @@ export default function StudyStudio({ isOpen, onClose, palette, userName }: Stud
   const [showDoodles, setShowDoodles] = useState(true);
 
   // Notes state
-  const [generatedNote, setGeneratedNote] = useState<GeneratedNote>(DEMO_NOTE);
+  const [generatedNote, setGeneratedNote] = useState<GeneratedNote | null>(null);
   const [savedNotes, setSavedNotes] = useState<GeneratedNote[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [loading, setLoading] = useState(false);
@@ -344,7 +223,7 @@ export default function StudyStudio({ isOpen, onClose, palette, userName }: Stud
     const rect = canvas.getBoundingClientRect();
     const x = e.clientX - rect.left;
     const y = e.clientY - rect.top;
-    
+
     setIsDrawing(true);
     addPoint(x, y, false);
   };
@@ -356,7 +235,7 @@ export default function StudyStudio({ isOpen, onClose, palette, userName }: Stud
     const rect = canvas.getBoundingClientRect();
     const x = e.clientX - rect.left;
     const y = e.clientY - rect.top;
-    
+
     addPoint(x, y, true);
     redrawCanvas();
   };
@@ -396,7 +275,7 @@ export default function StudyStudio({ isOpen, onClose, palette, userName }: Stud
     if (!ctx) return;
 
     ctx.clearRect(0, 0, canvas.width, canvas.height);
-    
+
     const points = canvasPointsRef.current;
     if (points.length === 0) return;
 
@@ -430,9 +309,16 @@ export default function StudyStudio({ isOpen, onClose, palette, userName }: Stud
     redrawCanvas();
   };
 
-  // Adjust canvas size when window changes or component loads
   useEffect(() => {
     if (isOpen) {
+      // Ensure we start with a clean state on open unless explicitly loading a saved note
+      if (activeTab !== "savedNotes") {
+        setTopicInput("");
+        setSubjectType("");
+        setPyqQuery("");
+        removeFile();
+      }
+
       setTimeout(() => {
         const canvas = canvasRef.current;
         if (canvas && canvas.parentElement) {
@@ -465,12 +351,12 @@ export default function StudyStudio({ isOpen, onClose, palette, userName }: Stud
   }, [activeTab]);
 
   // Generate Notes using backend proxy API
-    const generateHandwrittenNotes_API = async (modeType: "create" | "pyq" | "scan" | "savedNotes") => { 
+    const generateHandwrittenNotes_API = async (modeType: "create" | "pyq" | "scan" | "savedNotes") => {
     // Agar user savedNotes tab par hai, toh API call ki zaroorat nahi hai
     if (modeType === "savedNotes") return;
       setLoading(true);
     setStatusMsg("Connecting with Lisa's brain cells...");
-    
+
     try {
       if (modeType === "create") {
         if (!topicInput.trim()) {
@@ -493,7 +379,7 @@ export default function StudyStudio({ isOpen, onClose, palette, userName }: Stud
       }
 
       setStatusMsg("Writing beautifully in topper ink... ✍️");
-      
+
       const res = await fetch("/api/study/generate", {
         method: "POST",
         headers: {
@@ -589,6 +475,10 @@ export default function StudyStudio({ isOpen, onClose, palette, userName }: Stud
 
   // Printing Layout directly via browser native window (best for standard high definition styled margins)
   const handlePrint = () => {
+    if (!generatedNote) {
+      alert("Pehle note generate toh hone do!");
+      return;
+    }
     const printableArea = document.getElementById("lisa-handwritten-ruled-note-sheet");
     if (!printableArea) return;
 
@@ -836,7 +726,7 @@ export default function StudyStudio({ isOpen, onClose, palette, userName }: Stud
               <div class="question-box">
                 <div class="question-title">${q.question}</div>
                 <div style="margin-bottom: 10px; font-weight: 500;"><b>Answer:</b> ${q.answer}</div>
-                
+
                 ${q.importantPoints && q.importantPoints.length > 0 ? `
                   <div style="margin: 8px 0;">
                     <b>Key Concept Points:</b>
@@ -866,7 +756,7 @@ export default function StudyStudio({ isOpen, onClose, palette, userName }: Stud
               <div class="question-box">
                 <div class="question-title">${q.question}</div>
                 <div style="margin-bottom: 10px;"><b>Detailed Answer:</b> ${q.detailedAnswer}</div>
-                
+
                 <div style="margin: 10px 0; padding-left: 10px; border-left: 2px dashed ${inkColor}aa;">
                   <b>Step-by-step Explanation:</b>
                   <p style="white-space: pre-line;">${q.stepByStepExplanation}</p>
@@ -934,7 +824,7 @@ export default function StudyStudio({ isOpen, onClose, palette, userName }: Stud
   return (
     <AnimatePresence>
       <div className="fixed inset-0 w-full h-full bg-[#03070c]/90 backdrop-blur-md flex items-center justify-center z-50 overflow-hidden p-3 md:p-6 select-none pointer-events-auto">
-        <motion.div 
+        <motion.div
           initial={{ opacity: 0, scale: 0.95, y: 30 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0.95, y: 30 }}
@@ -957,7 +847,7 @@ export default function StudyStudio({ isOpen, onClose, palette, userName }: Stud
               </div>
 
               {/* Mobile Only Cross Button (Jo sirf 3.jpeg mobile view me top right par dikhega) */}
-              <button 
+              <button
                 onClick={() => {
                   // TODO: Agar aapke modal/window ko band karne ke liye koi aur function hai,
                   // jaise onClose() ya setIsOpen(false), toh use yahan replace kar dena.
@@ -1015,24 +905,20 @@ export default function StudyStudio({ isOpen, onClose, palette, userName }: Stud
                       type="text"
                       value={topicInput}
                       onChange={(e) => setTopicInput(e.target.value)}
-                      placeholder="e.g. Krebs Cycle, Photosynthesis, Neural Networks..."
+                      placeholder="e.g. Ancient Rome, Neural Networks, Macroeconomics..."
                       className="w-full bg-white/[0.03] border border-white/10 focus:border-cyan-500 rounded-xl px-3 py-2.5 text-xs text-white placeholder-white/20 outline-none transition-all font-sans"
                     />
                   </div>
-                  
+
                   <div className="space-y-1">
                     <label className="text-[10px] font-mono uppercase text-white/40 tracking-wider">Subject Classification</label>
-                    <select
+                    <input
+                      type="text"
                       value={subjectType}
                       onChange={(e) => setSubjectType(e.target.value)}
-                      className="w-full bg-zinc-900 border border-white/10 focus:border-cyan-500 rounded-xl px-3 py-2.5 text-xs text-white placeholder-white/20 outline-none transition-all cursor-pointer"
-                    >
-                      <option value="Biochemistry & Biology">Biochemistry & Biology</option>
-                      <option value="Machine Learning / CS">Machine Learning / Computer Science</option>
-                      <option value="Electrical Engineering">Electrical Engineering</option>
-                      <option value="Thermodynamics Physics">Thermodynamics Physics</option>
-                      <option value="Civil Earth Sciences">Civil Earth Sciences</option>
-                    </select>
+                      placeholder="e.g. World History, Computer Science, Economics..."
+                      className="w-full bg-white/[0.03] border border-white/10 focus:border-cyan-500 rounded-xl px-3 py-2.5 text-xs text-white placeholder-white/20 outline-none transition-all font-sans"
+                    />
                   </div>
                 </div>
               )}
@@ -1056,7 +942,7 @@ export default function StudyStudio({ isOpen, onClose, palette, userName }: Stud
                 <div className="space-y-4">
                   <div className="space-y-1">
                     <label className="text-[10px] font-mono uppercase text-white/40 tracking-wider">Scan / Upload Paper</label>
-                    <div 
+                    <div
                       onDragOver={handleDragOver}
                       onDrop={handleDrop}
                       className="border-2 border-dashed border-white/10 rounded-xl p-6 flex flex-col items-center justify-center gap-2 text-white/40 hover:border-cyan-500/50 transition-all cursor-pointer"
@@ -1080,7 +966,7 @@ export default function StudyStudio({ isOpen, onClose, palette, userName }: Stud
                   />
                   <div className="space-y-2">
                     {savedNotes.filter(n => n.topicName.toLowerCase().includes(searchQuery.toLowerCase())).map((note, index) => (
-                      <button 
+                      <button
                         key={index}
                         onClick={() => setGeneratedNote(note)}
                         className="w-full text-left p-3 bg-white/[0.03] rounded-lg text-white/70 text-xs hover:bg-white/10"
@@ -1141,8 +1027,8 @@ export default function StudyStudio({ isOpen, onClose, palette, userName }: Stud
                     <button
                       onClick={() => { stopWebcamScanner(); }}
                       className={`flex-1 py-1.5 rounded-lg text-[10px] font-mono uppercase tracking-wider border cursor-pointer text-center ${
-                        !isWebcamOpen 
-                          ? "bg-white/10 text-white border-white/10" 
+                        !isWebcamOpen
+                          ? "bg-white/10 text-white border-white/10"
                           : "bg-transparent text-white/50 border-white/5 hover:text-white"
                       }`}
                     >
@@ -1151,8 +1037,8 @@ export default function StudyStudio({ isOpen, onClose, palette, userName }: Stud
                     <button
                       onClick={() => { startWebcamScanner(); }}
                       className={`flex-1 py-1.5 rounded-lg text-[10px] font-mono uppercase tracking-wider border cursor-pointer text-center flex items-center justify-center gap-1.5 ${
-                        isWebcamOpen 
-                          ? "bg-[#10b981]/10 text-[#10b981] border-[#10b981]/35 animate-pulse" 
+                        isWebcamOpen
+                          ? "bg-[#10b981]/10 text-[#10b981] border-[#10b981]/35 animate-pulse"
                           : "bg-transparent text-white/40 hover:text-white/80 border-white/5 hover:border-white/10"
                       }`}
                     >
@@ -1384,11 +1270,11 @@ export default function StudyStudio({ isOpen, onClose, palette, userName }: Stud
 
             {/* Simulated Ruled notebook scroll container */}
             <div className="flex-1 overflow-y-auto p-4 md:p-8 flex flex-col gap-8 scroll-smooth select-text">
-              <div 
+              <div
                 id="lisa-handwritten-ruled-note-sheet"
                 className={`w-full max-w-4xl mx-auto rounded-2xl relative shadow-2xl min-h-[900px] border transition-all overflow-hidden flex flex-col ${
-                  paperStyle === "ruled" 
-                    ? "bg-[#fcf8e3] border-amber-900/10 text-[#1a2d5a]" 
+                  paperStyle === "ruled"
+                    ? "bg-[#fcf8e3] border-amber-900/10 text-[#1a2d5a]"
                     : "bg-[#0b1528] border-cyan-500/10 text-cyan-200"
                 }`}
                 style={{
@@ -1400,10 +1286,10 @@ export default function StudyStudio({ isOpen, onClose, palette, userName }: Stud
                 }}
               >
                 {/* Notebook vertical left pink margin margin rule */}
-                <div 
+                <div
                   className={`absolute top-0 bottom-0 left-[60px] w-0.5 border-r pointer-events-none ${
                     paperStyle === "ruled" ? "border-rose-400/70" : "border-rose-500/30"
-                  }`} 
+                  }`}
                 />
 
                 {/* Hand-drawn Interactive Scratch Canvas Overlay layer */}
@@ -1416,343 +1302,383 @@ export default function StudyStudio({ isOpen, onClose, palette, userName }: Stud
                   className="absolute inset-0 w-full h-full pointer-events-auto z-10 cursor-crosshair opacity-90 mix-blend-multiply"
                 />
 
-                {/* Standard study header container (aligned right of margin line) */}
-                <div className="relative pl-[85px] pr-6 md:pr-10 pt-10 pb-6 shrink-0 z-0">
-                  <div className="flex flex-col border-b border-rose-400/50 pb-3 mb-6">
-                    <span 
-                      className={`text-2xl font-handwritten font-bold tracking-wide leading-tight ${
-                        paperStyle === "ruled" ? "text-red-700" : "text-rose-400"
-                      }`}
-                    >
-                      # {generatedNote.topicName}
-                    </span>
-                    <div className="flex flex-wrap items-center gap-3 mt-1.5 text-xs font-mono tracking-wider opacity-60">
-                      <span className={paperStyle === "ruled" ? "text-[#1e3a8a]/70" : "text-sky-400/70"}>
-                        <b>Subject:</b> {generatedNote.subject}
-                      </span>
-                      {generatedNote.gradeStandard && (
-                        <span className="flex items-center gap-1 text-emerald-600 font-semibold">
-                          <span>★ {generatedNote.gradeStandard.toUpperCase()}</span>
-                        </span>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Summary notes box */}
-                  <div 
-                    className={`rounded-xl p-4 my-2 border font-handwritten text-xs md:text-sm italic tracking-wide leading-relaxed ${
-                      paperStyle === "ruled" 
-                        ? "bg-amber-100/40 border-amber-200 text-[#2563eb]" 
-                        : "bg-blue-950/20 border-cyan-500/10 text-cyan-400"
-                    }`}
-                  >
-                    💡 <span className="font-semibold uppercase tracking-wider mr-1 font-mono text-[10px]">Notebook Summary:</span> 
-                    {generatedNote.summary}
-                  </div>
-                </div>
-
                 {/* Inner Pages containing handwritten notes content */}
-                <div className="relative pl-[85px] pr-6 md:pr-10 pb-16 space-y-12 z-0 flex-1 font-handwritten text-[15px] sm:text-[16px] leading-[28px] tracking-wide" style={{ color: paperStyle === "ruled" ? inkColor : "#e0f2fe" }}>
-                  
-                  {/* INTRODUCTION */}
-                  <div className="space-y-2">
-                    <h3 className="text-lg font-bold underline text-rose-700 font-handwritten">
-                      ## Introduction
-                    </h3>
-                    <p className="leading-relaxed opacity-95 text-justify">
-                      {generatedNote.introduction}
-                    </p>
-                  </div>
-
-                  {/* DEFINITIONS */}
-                  <div className="space-y-3">
-                    <h3 className="text-lg font-bold underline text-rose-700 font-handwritten">
-                      ## Definition
-                    </h3>
-                    <div className="p-4 rounded-xl border border-dashed bg-yellow-200/20 border-yellow-400/40 text-rose-800 font-semibold shadow-sm leading-relaxed whitespace-pre-wrap">
-                      {generatedNote.definition}
-                    </div>
-                  </div>
-
-                  {/* KEY CONCEPTS */}
-                  <div className="space-y-2">
-                    <h3 className="text-lg font-bold underline text-rose-700 font-handwritten">
-                      ## Key Concepts
-                    </h3>
-                    <div className="whitespace-pre-wrap opacity-95">
-                      {generatedNote.keyConcepts}
-                    </div>
-                  </div>
-
-                  {/* IMPORTANT POINTS */}
-                  <div className="space-y-2">
-                    <h3 className="text-lg font-bold underline text-rose-700 font-handwritten">
-                      ## Important Points
-                    </h3>
-                    <ul className="space-y-1.5 pl-2">
-                      {generatedNote.importantPoints.map((pt, idx) => (
-                        <li key={idx} className="flex items-start gap-2">
-                          <span className="text-rose-500 shrink-0 text-sm mt-0.5">⚡</span>
-                          <span className="opacity-95">{pt}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-
-                  {/* DETAILED EXPLANATION */}
-                  <div className="space-y-2">
-                    <h3 className="text-lg font-bold underline text-rose-700 font-handwritten">
-                      ## Detailed Explanation
-                    </h3>
-                    <p className="leading-relaxed opacity-95 text-justify">
-                      {generatedNote.detailedExplanation}
-                    </p>
-                  </div>
-
-                  {/* DIAGRAMS */}
-                  {generatedNote.diagrams && generatedNote.diagrams.length > 0 && (
-                    <div className="space-y-4">
-                      <h3 className="text-lg font-bold underline text-rose-700 font-handwritten">
-                        ## Diagram
-                      </h3>
-                      {generatedNote.diagrams.map((diag, idx) => (
-                        <div key={idx} className="space-y-2">
-                          <div className="text-xs font-mono font-bold tracking-wider opacity-60 uppercase">
-                            🖼️ {diag.title}
-                          </div>
-                          <pre className="font-mono text-xs sm:text-sm leading-relaxed p-4 rounded-xl overflow-x-auto whitespace-pre bg-black/5 dark:bg-white/5 border border-dashed border-red-500/20 shadow-inner select-all">
-                            {diag.asciiDiagram}
-                          </pre>
-                          {diag.caption && (
-                            <p className="text-xs italic opacity-70 pl-2">
-                              [{diag.caption}]
-                            </p>
+                {generatedNote ? (
+                  <>
+                    {/* Standard study header container (aligned right of margin line) */}
+                    <div className="relative pl-[85px] pr-6 md:pr-10 pt-10 pb-6 shrink-0 z-0">
+                      <div className="flex flex-col border-b border-rose-400/50 pb-3 mb-6">
+                        <span
+                          className={`text-2xl font-handwritten font-bold tracking-wide leading-tight ${
+                            paperStyle === "ruled" ? "text-red-700" : "text-rose-400"
+                          }`}
+                        >
+                          # {generatedNote.topicName}
+                        </span>
+                        <div className="flex flex-wrap items-center gap-3 mt-1.5 text-xs font-mono tracking-wider opacity-60">
+                          <span className={paperStyle === "ruled" ? "text-[#1e3a8a]/70" : "text-sky-400/70"}>
+                            <b>Subject:</b> {generatedNote.subject}
+                          </span>
+                          {generatedNote.gradeStandard && (
+                            <span className="flex items-center gap-1 text-emerald-600 font-semibold">
+                              <span>★ {generatedNote.gradeStandard.toUpperCase()}</span>
+                            </span>
                           )}
                         </div>
-                      ))}
-                    </div>
-                  )}
+                      </div>
 
-                  {/* FLOWCHART */}
-                  <div className="space-y-3">
-                    <h3 className="text-lg font-bold underline text-rose-700 font-handwritten">
-                      ## Flowchart
-                    </h3>
-                    <pre className="font-mono text-xs sm:text-sm leading-relaxed p-4 rounded-xl overflow-x-auto whitespace-pre bg-black/5 dark:bg-white/5 border border-dashed border-cyan-500/20 shadow-inner select-all">
-                      {generatedNote.flowchartsText}
-                    </pre>
-                  </div>
-
-                  {/* IMPORTANT TABLES */}
-                  {generatedNote.importantTable && (
-                    <div className="space-y-3">
-                      <h3 className="text-lg font-bold underline text-rose-700 font-handwritten">
-                        ## Important Table
-                      </h3>
-                      <div className="overflow-x-auto rounded-xl border border-red-700/20 shadow-sm bg-white/10">
-                        <table className="min-w-full divide-y divide-red-700/10 text-left font-handwritten text-xs sm:text-sm">
-                          <thead>
-                            <tr className="bg-red-700/5">
-                              {generatedNote.importantTable.headers.map((hdr, idx) => (
-                                <th key={idx} className="px-3 py-2 border border-red-700/25 font-bold text-rose-800">
-                                  {hdr}
-                                </th>
-                              ))}
-                            </tr>
-                          </thead>
-                          <tbody className="divide-y divide-red-700/10">
-                            {generatedNote.importantTable.rows.map((row, rIdx) => (
-                              <tr key={rIdx}>
-                                {row.map((cell, cIdx) => (
-                                  <td key={cIdx} className="px-3 py-2 border border-red-700/20">
-                                    {cell}
-                                  </td>
-                                ))}
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
+                      {/* Summary notes box */}
+                      <div
+                        className={`rounded-xl p-4 my-2 border font-handwritten text-xs md:text-sm italic tracking-wide leading-relaxed ${
+                          paperStyle === "ruled"
+                            ? "bg-amber-100/40 border-amber-200 text-[#2563eb]"
+                            : "bg-blue-950/20 border-cyan-500/10 text-cyan-400"
+                        }`}
+                      >
+                        💡 <span className="font-semibold uppercase tracking-wider mr-1 font-mono text-[10px]">Notebook Summary:</span>
+                        {generatedNote.summary}
                       </div>
                     </div>
-                  )}
 
-                  {/* KEY FACTS */}
-                  <div className="space-y-2">
-                    <h3 className="text-lg font-bold underline text-rose-700 font-handwritten">
-                      ## Key Facts
-                    </h3>
-                    <ul className="space-y-1.5 pl-2">
-                      {generatedNote.keyFacts.map((fact, idx) => (
-                        <li key={idx} className="flex items-start gap-2">
-                          <span className="text-rose-500 shrink-0 text-xs mt-1">📌</span>
-                          <span className="opacity-95">{fact}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
+                    <div className="relative pl-[85px] pr-6 md:pr-10 pb-16 space-y-12 z-0 flex-1 font-handwritten text-[15px] sm:text-[16px] leading-[28px] tracking-wide" style={{ color: paperStyle === "ruled" ? inkColor : "#e0f2fe" }}>
 
-                  {/* PREVIOUS YEAR QUESTIONS */}
-                  <div className="space-y-2">
-                    <h3 className="text-lg font-bold underline text-rose-700 font-handwritten">
-                      ## Previous Year Questions
-                    </h3>
-                    <ul className="space-y-1.5 pl-2">
-                      {generatedNote.previousYearQuestions.map((q, idx) => (
-                        <li key={idx} className="flex items-start gap-2">
-                          <span className="text-rose-600 font-bold shrink-0 text-xs">📝</span>
-                          <span className="font-semibold text-rose-800 dark:text-rose-300">{q}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
+                      {/* INTRODUCTION */}
+                      <div className="space-y-2">
+                        <h3 className="text-lg font-bold underline text-rose-700 font-handwritten">
+                          ## Introduction
+                        </h3>
+                        <p className="leading-relaxed opacity-95 text-justify">
+                          {generatedNote.introduction}
+                        </p>
+                      </div>
 
-                  {/* VIVA QUESTIONS */}
-                  <div className="space-y-4">
-                    <h3 className="text-lg font-bold underline text-rose-700 font-handwritten">
-                      ## Viva Questions
-                    </h3>
-                    <div className="space-y-3">
-                      {generatedNote.vivaQuestions.map((vq, idx) => (
-                        <div key={idx} className="p-3.5 rounded-lg border border-rose-300/30 bg-rose-500/5 shadow-sm space-y-1">
-                          <div className="font-bold text-rose-700 dark:text-rose-400">
-                            {vq.question}
-                          </div>
-                          <div className="opacity-95 pl-2 border-l-2 border-dashed border-red-500/20">
-                            {vq.answer}
-                          </div>
+                      {/* DEFINITIONS */}
+                      <div className="space-y-3">
+                        <h3 className="text-lg font-bold underline text-rose-700 font-handwritten">
+                          ## Definition
+                        </h3>
+                        <div className="p-4 rounded-xl border border-dashed bg-yellow-200/20 border-yellow-400/40 text-rose-800 font-semibold shadow-sm leading-relaxed whitespace-pre-wrap">
+                          {generatedNote.definition}
                         </div>
-                      ))}
-                    </div>
-                  </div>
+                      </div>
 
-                  {/* 5 MARKS QUESTIONS */}
-                  <div className="space-y-4">
-                    <h3 className="text-lg font-bold underline text-rose-700 font-handwritten">
-                      ## 5 Marks Questions
-                    </h3>
-                    <div className="space-y-6">
-                      {generatedNote.fiveMarksQuestions.map((q, idx) => (
-                        <div key={idx} className="p-4 rounded-xl border border-rose-400/20 bg-rose-500/5 space-y-3">
-                          <div className="font-bold text-lg text-rose-800 dark:text-rose-300">
-                            {q.question}
-                          </div>
-                          <div>
-                            <span className="font-bold">Answer:</span> {q.answer}
-                          </div>
-                          
-                          {q.importantPoints && q.importantPoints.length > 0 && (
-                            <div className="pl-3 border-l-2 border-red-500/20 space-y-1">
-                              <span className="font-bold text-xs uppercase tracking-wider text-rose-500">Key Points:</span>
-                              <ul className="space-y-1 list-disc pl-4 text-xs">
-                                {q.importantPoints.map((pt, pIdx) => (
-                                  <li key={pIdx}>{pt}</li>
+                      {/* KEY CONCEPTS */}
+                      <div className="space-y-2">
+                        <h3 className="text-lg font-bold underline text-rose-700 font-handwritten">
+                          ## Key Concepts
+                        </h3>
+                        <div className="whitespace-pre-wrap opacity-95">
+                          {generatedNote.keyConcepts}
+                        </div>
+                      </div>
+
+                      {/* IMPORTANT POINTS */}
+                      <div className="space-y-2">
+                        <h3 className="text-lg font-bold underline text-rose-700 font-handwritten">
+                          ## Important Points
+                        </h3>
+                        <ul className="space-y-1.5 pl-2">
+                          {generatedNote.importantPoints.map((pt, idx) => (
+                            <li key={idx} className="flex items-start gap-2">
+                              <span className="text-rose-500 shrink-0 text-sm mt-0.5">⚡</span>
+                              <span className="opacity-95">{pt}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+
+                      {/* DETAILED EXPLANATION */}
+                      <div className="space-y-2">
+                        <h3 className="text-lg font-bold underline text-rose-700 font-handwritten">
+                          ## Detailed Explanation
+                        </h3>
+                        <p className="leading-relaxed opacity-95 text-justify">
+                          {generatedNote.detailedExplanation}
+                        </p>
+                      </div>
+
+                      {/* DIAGRAMS */}
+                      {generatedNote.diagrams && generatedNote.diagrams.length > 0 && (
+                        <div className="space-y-4">
+                          <h3 className="text-lg font-bold underline text-rose-700 font-handwritten">
+                            ## Diagram
+                          </h3>
+                          {generatedNote.diagrams.map((diag, idx) => (
+                            <div key={idx} className="space-y-2">
+                              <div className="text-xs font-mono font-bold tracking-wider opacity-60 uppercase">
+                                🖼️ {diag.title}
+                              </div>
+                              <pre className="font-mono text-xs sm:text-sm leading-relaxed p-4 rounded-xl overflow-x-auto whitespace-pre bg-black/5 dark:bg-white/5 border border-dashed border-red-500/20 shadow-inner select-all">
+                                {diag.asciiDiagram}
+                              </pre>
+                              {diag.caption && (
+                                <p className="text-xs italic opacity-70 pl-2">
+                                  [{diag.caption}]
+                                </p>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* FLOWCHART */}
+                      <div className="space-y-3">
+                        <h3 className="text-lg font-bold underline text-rose-700 font-handwritten">
+                          ## Flowchart
+                        </h3>
+                        <pre className="font-mono text-xs sm:text-sm leading-relaxed p-4 rounded-xl overflow-x-auto whitespace-pre bg-black/5 dark:bg-white/5 border border-dashed border-cyan-500/20 shadow-inner select-all">
+                          {generatedNote.flowchartsText}
+                        </pre>
+                      </div>
+
+                      {/* IMPORTANT TABLES */}
+                      {generatedNote.importantTable && (
+                        <div className="space-y-3">
+                          <h3 className="text-lg font-bold underline text-rose-700 font-handwritten">
+                            ## Important Table
+                          </h3>
+                          <div className="overflow-x-auto rounded-xl border border-red-700/20 shadow-sm bg-white/10">
+                            <table className="min-w-full divide-y divide-red-700/10 text-left font-handwritten text-xs sm:text-sm">
+                              <thead>
+                                <tr className="bg-red-700/5">
+                                  {generatedNote.importantTable.headers.map((hdr, idx) => (
+                                    <th key={idx} className="px-3 py-2 border border-red-700/25 font-bold text-rose-800">
+                                      {hdr}
+                                    </th>
+                                  ))}
+                                </tr>
+                              </thead>
+                              <tbody className="divide-y divide-red-700/10">
+                                {generatedNote.importantTable.rows.map((row, rIdx) => (
+                                  <tr key={rIdx}>
+                                    {row.map((cell, cIdx) => (
+                                      <td key={cIdx} className="px-3 py-2 border border-red-700/20">
+                                        {cell}
+                                      </td>
+                                    ))}
+                                  </tr>
                                 ))}
-                              </ul>
-                            </div>
-                          )}
-
-                          {q.diagram && (
-                            <div className="space-y-1">
-                              <span className="font-bold text-xs uppercase tracking-wider text-rose-500">Required Diagram:</span>
-                              <pre className="font-mono text-xs leading-relaxed p-3 rounded-lg overflow-x-auto whitespace-pre bg-black/5 dark:bg-white/5 border border-dashed border-red-500/20 shadow-inner">
-                                {q.diagram}
-                              </pre>
-                            </div>
-                          )}
-
-                          {q.flowchart && (
-                            <div className="space-y-1">
-                              <span className="font-bold text-xs uppercase tracking-wider text-rose-500">Required Flowchart:</span>
-                              <pre className="font-mono text-xs leading-relaxed p-3 rounded-lg overflow-x-auto whitespace-pre bg-black/5 dark:bg-white/5 border border-dashed border-cyan-500/20 shadow-inner">
-                                {q.flowchart}
-                              </pre>
-                            </div>
-                          )}
+                              </tbody>
+                            </table>
+                          </div>
                         </div>
-                      ))}
-                    </div>
-                  </div>
+                      )}
 
-                  {/* 10 MARKS QUESTIONS */}
-                  <div className="space-y-4">
-                    <h3 className="text-lg font-bold underline text-rose-700 font-handwritten">
-                      ## 10 Marks Questions
-                    </h3>
-                    <div className="space-y-8">
-                      {generatedNote.tenMarksQuestions.map((q, idx) => (
-                        <div key={idx} className="p-4 rounded-xl border border-rose-400/30 bg-rose-500/5 space-y-4 text-justify">
-                          <div className="font-bold text-lg text-rose-800 dark:text-rose-300">
-                            {q.question}
-                          </div>
-                          <div>
-                            <span className="font-bold block mb-1">Detailed Answer:</span> 
-                            <p className="opacity-95">{q.detailedAnswer}</p>
-                          </div>
+                      {/* KEY FACTS */}
+                      <div className="space-y-2">
+                        <h3 className="text-lg font-bold underline text-rose-700 font-handwritten">
+                          ## Key Facts
+                        </h3>
+                        <ul className="space-y-1.5 pl-2">
+                          {generatedNote.keyFacts.map((fact, idx) => (
+                            <li key={idx} className="flex items-start gap-2">
+                              <span className="text-rose-500 shrink-0 text-xs mt-1">📌</span>
+                              <span className="opacity-95">{fact}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
 
-                          <div className="p-3 rounded-lg bg-black/5 dark:bg-white/5 border-l-4 border-rose-500/50 space-y-1 text-xs">
-                            <span className="font-bold text-rose-500 uppercase">Step-by-step Explanation:</span>
-                            <div className="whitespace-pre-line opacity-90">{q.stepByStepExplanation}</div>
-                          </div>
-                          
-                          {q.importantExamPoints && q.importantExamPoints.length > 0 && (
-                            <div className="pl-3 border-l-2 border-red-500/20 space-y-1">
-                              <span className="font-bold text-xs uppercase tracking-wider text-rose-500">Important Exam Points:</span>
-                              <ul className="space-y-1 list-disc pl-4 text-xs">
-                                {q.importantExamPoints.map((pt, pIdx) => (
-                                  <li key={pIdx}>{pt}</li>
-                                ))}
-                              </ul>
+                      {/* PREVIOUS YEAR QUESTIONS */}
+                      <div className="space-y-2">
+                        <h3 className="text-lg font-bold underline text-rose-700 font-handwritten">
+                          ## Previous Year Questions
+                        </h3>
+                        <ul className="space-y-1.5 pl-2">
+                          {generatedNote.previousYearQuestions.map((q, idx) => (
+                            <li key={idx} className="flex items-start gap-2">
+                              <span className="text-rose-600 font-bold shrink-0 text-xs">📝</span>
+                              <span className="font-semibold text-rose-800 dark:text-rose-300">{q}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+
+                      {/* VIVA QUESTIONS */}
+                      <div className="space-y-4">
+                        <h3 className="text-lg font-bold underline text-rose-700 font-handwritten">
+                          ## Viva Questions
+                        </h3>
+                        <div className="space-y-3">
+                          {generatedNote.vivaQuestions.map((vq, idx) => (
+                            <div key={idx} className="p-3.5 rounded-lg border border-rose-300/30 bg-rose-500/5 shadow-sm space-y-1">
+                              <div className="font-bold text-rose-700 dark:text-rose-400">
+                                {vq.question}
+                              </div>
+                              <div className="opacity-95 pl-2 border-l-2 border-dashed border-red-500/20">
+                                {vq.answer}
+                              </div>
                             </div>
-                          )}
-
-                          {q.diagram && (
-                            <div className="space-y-1">
-                              <span className="font-bold text-xs uppercase tracking-wider text-rose-500">Required Labelled Diagram:</span>
-                              <pre className="font-mono text-xs leading-relaxed p-3 rounded-lg overflow-x-auto whitespace-pre bg-black/5 dark:bg-white/5 border border-dashed border-red-500/20 shadow-inner">
-                                {q.diagram}
-                              </pre>
-                            </div>
-                          )}
-
-                          {q.flowchart && (
-                            <div className="space-y-1">
-                              <span className="font-bold text-xs uppercase tracking-wider text-rose-500">Operation Flowchart:</span>
-                              <pre className="font-mono text-xs leading-relaxed p-3 rounded-lg overflow-x-auto whitespace-pre bg-black/5 dark:bg-white/5 border border-dashed border-cyan-500/20 shadow-inner">
-                                {q.flowchart}
-                              </pre>
-                            </div>
-                          )}
+                          ))}
                         </div>
-                      ))}
+                      </div>
+
+                      {/* 5 MARKS QUESTIONS */}
+                      <div className="space-y-4">
+                        <h3 className="text-lg font-bold underline text-rose-700 font-handwritten">
+                          ## 5 Marks Questions
+                        </h3>
+                        <div className="space-y-6">
+                          {generatedNote.fiveMarksQuestions.map((q, idx) => (
+                            <div key={idx} className="p-4 rounded-xl border border-rose-400/20 bg-rose-500/5 space-y-3">
+                              <div className="font-bold text-lg text-rose-800 dark:text-rose-300">
+                                {q.question}
+                              </div>
+                              <div>
+                                <span className="font-bold">Answer:</span> {q.answer}
+                              </div>
+
+                              {q.importantPoints && q.importantPoints.length > 0 && (
+                                <div className="pl-3 border-l-2 border-red-500/20 space-y-1">
+                                  <span className="font-bold text-xs uppercase tracking-wider text-rose-500">Key Points:</span>
+                                  <ul className="space-y-1 list-disc pl-4 text-xs">
+                                    {q.importantPoints.map((pt, pIdx) => (
+                                      <li key={pIdx}>{pt}</li>
+                                    ))}
+                                  </ul>
+                                </div>
+                              )}
+
+                              {q.diagram && (
+                                <div className="space-y-1">
+                                  <span className="font-bold text-xs uppercase tracking-wider text-rose-500">Required Diagram:</span>
+                                  <pre className="font-mono text-xs leading-relaxed p-3 rounded-lg overflow-x-auto whitespace-pre bg-black/5 dark:bg-white/5 border border-dashed border-red-500/20 shadow-inner">
+                                    {q.diagram}
+                                  </pre>
+                                </div>
+                              )}
+
+                              {q.flowchart && (
+                                <div className="space-y-1">
+                                  <span className="font-bold text-xs uppercase tracking-wider text-rose-500">Required Flowchart:</span>
+                                  <pre className="font-mono text-xs leading-relaxed p-3 rounded-lg overflow-x-auto whitespace-pre bg-black/5 dark:bg-white/5 border border-dashed border-cyan-500/20 shadow-inner">
+                                    {q.flowchart}
+                                  </pre>
+                                </div>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* 10 MARKS QUESTIONS */}
+                      <div className="space-y-4">
+                        <h3 className="text-lg font-bold underline text-rose-700 font-handwritten">
+                          ## 10 Marks Questions
+                        </h3>
+                        <div className="space-y-8">
+                          {generatedNote.tenMarksQuestions.map((q, idx) => (
+                            <div key={idx} className="p-4 rounded-xl border border-rose-400/30 bg-rose-500/5 space-y-4 text-justify">
+                              <div className="font-bold text-lg text-rose-800 dark:text-rose-300">
+                                {q.question}
+                              </div>
+                              <div>
+                                <span className="font-bold block mb-1">Detailed Answer:</span>
+                                <p className="opacity-95">{q.detailedAnswer}</p>
+                              </div>
+
+                              <div className="p-3 rounded-lg bg-black/5 dark:bg-white/5 border-l-4 border-rose-500/50 space-y-1 text-xs">
+                                <span className="font-bold text-rose-500 uppercase">Step-by-step Explanation:</span>
+                                <div className="whitespace-pre-line opacity-90">{q.stepByStepExplanation}</div>
+                              </div>
+
+                              {q.importantExamPoints && q.importantExamPoints.length > 0 && (
+                                <div className="pl-3 border-l-2 border-red-500/20 space-y-1">
+                                  <span className="font-bold text-xs uppercase tracking-wider text-rose-500">Important Exam Points:</span>
+                                  <ul className="space-y-1 list-disc pl-4 text-xs">
+                                    {q.importantExamPoints.map((pt, pIdx) => (
+                                      <li key={pIdx}>{pt}</li>
+                                    ))}
+                                  </ul>
+                                </div>
+                              )}
+
+                              {q.diagram && (
+                                <div className="space-y-1">
+                                  <span className="font-bold text-xs uppercase tracking-wider text-rose-500">Required Labelled Diagram:</span>
+                                  <pre className="font-mono text-xs leading-relaxed p-3 rounded-lg overflow-x-auto whitespace-pre bg-black/5 dark:bg-white/5 border border-dashed border-red-500/20 shadow-inner">
+                                    {q.diagram}
+                                  </pre>
+                                </div>
+                              )}
+
+                              {q.flowchart && (
+                                <div className="space-y-1">
+                                  <span className="font-bold text-xs uppercase tracking-wider text-rose-500">Operation Flowchart:</span>
+                                  <pre className="font-mono text-xs leading-relaxed p-3 rounded-lg overflow-x-auto whitespace-pre bg-black/5 dark:bg-white/5 border border-dashed border-cyan-500/20 shadow-inner">
+                                    {q.flowchart}
+                                  </pre>
+                                </div>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* EXAM NOTES */}
+                      <div className="space-y-2">
+                        <h3 className="text-lg font-bold underline text-rose-700 font-handwritten">
+                          ## Exam Notes
+                        </h3>
+                        <ul className="space-y-1.5 pl-2">
+                          {generatedNote.examNotes.map((n, idx) => (
+                            <li key={idx} className="flex items-start gap-2">
+                              <span className="text-rose-500 shrink-0 text-xs mt-1">🔥</span>
+                              <span className="opacity-95 font-semibold text-rose-950 dark:text-rose-200">{n}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+
+                      {/* SUMMARY CAPSULE */}
+                      <div className="space-y-2 pt-4 border-t border-red-500/15">
+                        <h3 className="text-lg font-bold underline text-rose-700 font-handwritten">
+                          ## Summary
+                        </h3>
+                        <div className="p-4 rounded-xl bg-yellow-200/50 border border-yellow-400 text-slate-900 font-medium italic shadow-sm">
+                          📝 {generatedNote.summary}
+                        </div>
+                      </div>
+
+                    </div>
+                  </>
+                ) : (
+                  <div className="flex-1 flex flex-col items-center justify-center p-12 text-center space-y-6">
+                    <div className="w-24 h-24 rounded-full bg-white/5 flex items-center justify-center border border-white/10 relative">
+                      <BookOpen size={40} className="text-white/20" />
+                      <div className="absolute -top-1 -right-1 w-6 h-6 rounded-full bg-cyan-500 flex items-center justify-center animate-pulse">
+                        <Plus size={14} className="text-black" />
+                      </div>
+                    </div>
+                    <div className="max-w-md space-y-2">
+                      <h3 className="text-xl font-serif font-bold text-white/90">Your study canvas is ready.</h3>
+                      <p className="text-sm text-white/40 leading-relaxed italic">
+                        Enter a subject and topic on the left to create beautiful, handwritten exam notes automatically.
+                        Lisa will synthesize introduction, definitions, key concepts, diagrams, and even PYQs for you.
+                      </p>
+                    </div>
+                    <div className="flex gap-4">
+                      <div className="flex flex-col items-center gap-1">
+                        <div className="w-10 h-10 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center text-white/60 mb-1">
+                          <Edit3 size={18} />
+                        </div>
+                        <span className="text-[10px] font-mono uppercase tracking-widest text-white/30">Create</span>
+                      </div>
+                      <div className="flex flex-col items-center gap-1">
+                        <div className="w-10 h-10 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center text-white/60 mb-1">
+                          <FileSearch size={18} />
+                        </div>
+                        <span className="text-[10px] font-mono uppercase tracking-widest text-white/30">PYQ Mode</span>
+                      </div>
+                      <div className="flex flex-col items-center gap-1">
+                        <div className="w-10 h-10 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center text-white/60 mb-1">
+                          <Camera size={18} />
+                        </div>
+                        <span className="text-[10px] font-mono uppercase tracking-widest text-white/30">Scan Doc</span>
+                      </div>
                     </div>
                   </div>
-
-                  {/* EXAM NOTES */}
-                  <div className="space-y-2">
-                    <h3 className="text-lg font-bold underline text-rose-700 font-handwritten">
-                      ## Exam Notes
-                    </h3>
-                    <ul className="space-y-1.5 pl-2">
-                      {generatedNote.examNotes.map((n, idx) => (
-                        <li key={idx} className="flex items-start gap-2">
-                          <span className="text-rose-500 shrink-0 text-xs mt-1">🔥</span>
-                          <span className="opacity-95 font-semibold text-rose-950 dark:text-rose-200">{n}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-
-                  {/* SUMMARY CAPSULE */}
-                  <div className="space-y-2 pt-4 border-t border-red-500/15">
-                    <h3 className="text-lg font-bold underline text-rose-700 font-handwritten">
-                      ## Summary
-                    </h3>
-                    <div className="p-4 rounded-xl bg-yellow-200/50 border border-yellow-400 text-slate-900 font-medium italic shadow-sm">
-                      📝 {generatedNote.summary}
-                    </div>
-                  </div>
-
-                </div>
+                )}
               </div>
             </div>
           </div>
