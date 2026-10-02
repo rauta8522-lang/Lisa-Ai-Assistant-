@@ -1,0 +1,24 @@
+{
+  "name": "lisa-desktop-agent",
+  "version": "1.0.0",
+  "description": "Secure Local Windows Desktop Agent for Lisa AI Assistant",
+  "main": "dist/agent.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "tsx src/agent.ts",
+    "dev": "tsx watch src/agent.ts"
+  },
+  "keywords": ["lisa-agent", "windows-control", "desktop-automation", "ai-agent"],
+  "author": "Lisa AI",
+  "license": "MIT",
+  "dependencies": {
+    "ws": "^8.18.0",
+    "dotenv": "^16.4.7"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "@types/ws": "^8.5.13",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2"
+  }
+}

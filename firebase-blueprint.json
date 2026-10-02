@@ -1,21 +1,177 @@
 {
   "entities": {
+    "Organization": {
+      "title": "Organization",
+      "description": "Top-level entity representing an enterprise tenant or organization",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "type": { "type": "string", "enum": ["hospital", "zoo", "school", "company", "museum", "public", "individual"] },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "adminIds": { "type": "array", "items": { "type": "string" } },
+        "config": { "type": "object" }
+      },
+      "required": ["id", "name", "type", "createdAt"]
+    },
+    "User": {
+      "title": "User",
+      "description": "User profile with organization, role, and preference info",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "organizationId": { "type": "string" },
+        "email": { "type": "string" },
+        "role": { "type": "string", "enum": ["admin", "staff", "user"] },
+        "displayName": { "type": "string" },
+        "plan": { "type": "string", "enum": ["free", "paid"] },
+        "ageTier": { "type": "string", "enum": ["minor_under_18", "adult", "unknown"] }
+      },
+      "required": ["uid", "organizationId", "email", "role"]
+    },
+    "ChatMessage": {
+      "title": "ChatMessage",
+      "description": "Individual conversational text or voice transcript message",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "sender": { "type": "string", "enum": ["user", "lisa"] },
+        "text": { "type": "string" },
+        "conversationId": { "type": "string" },
+        "timestamp": { "type": "number" }
+      },
+      "required": ["id", "sender", "text"]
+    },
+    "Conversation": {
+      "title": "Conversation",
+      "description": "Isolated conversation sessions",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "organizationId": { "type": "string" },
+        "userId": { "type": "string" },
+        "title": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" },
+        "summary": { "type": "string" },
+        "isPrivate": { "type": "boolean" }
+      },
+      "required": ["id", "organizationId", "userId", "title", "createdAt", "updatedAt"]
+    },
+    "Document": {
+      "title": "Document",
+      "description": "Isolated uploaded documents",
+      "type": "object",
+      "properties": {
+        "documentId": { "type": "string" },
+        "organizationId": { "type": "string" },
+        "userId": { "type": "string" },
+        "fileName": { "type": "string" },
+        "fileType": { "type": "string" },
+        "summary": { "type": "string" },
+        "isMedical": { "type": "boolean" },
+        "uploadedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["documentId", "organizationId", "userId", "fileName", "uploadedAt"]
+    },
+    "Presentation": {
+      "title": "Presentation",
+      "description": "User generated slides presentation",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "slides": { "type": "array" },
+        "createdAt": { "type": "number" }
+      },
+      "required": ["title", "slides", "createdAt"]
+    },
+    "SavedNote": {
+      "title": "SavedNote",
+      "description": "User notebook and study studio notes",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "content": { "type": "string" },
+        "createdAt": { "type": "number" }
+      },
+      "required": ["title", "content"]
+    },
     "Feedback": {
       "title": "Feedback",
-      "description": "User feedback items",
+      "description": "User application feedback submission",
       "type": "object",
       "properties": {
         "userId": { "type": "string" },
+        "userEmail": { "type": "string" },
+        "type": { "type": "string" },
         "message": { "type": "string" },
-        "timestamp": { "type": "string", "format": "date-time" }
+        "createdAt": { "type": "number" }
       },
-      "required": ["userId", "message", "timestamp"]
+      "required": ["message", "createdAt"]
+    },
+    "ProductAnalytics": {
+      "title": "ProductAnalytics",
+      "description": "Privacy-conscious feature usage tracking",
+      "type": "object",
+      "properties": {
+        "organizationId": { "type": "string" },
+        "feature": { "type": "string" },
+        "usageCount": { "type": "number" },
+        "lastUsed": { "type": "string", "format": "date-time" }
+      },
+      "required": ["organizationId", "feature"]
     }
   },
   "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "Direct user profile root"
+    },
+    "/users/{userId}/chatHistory/{messageId}": {
+      "schema": "ChatMessage",
+      "description": "User direct chat message history"
+    },
+    "/users/{userId}/conversations/{conversationId}/messages/{messageId}": {
+      "schema": "ChatMessage",
+      "description": "User conversation session messages"
+    },
+    "/users/{userId}/presentations/{presentationId}": {
+      "schema": "Presentation",
+      "description": "User saved presentations"
+    },
+    "/users/{userId}/savedNotes/{noteId}": {
+      "schema": "SavedNote",
+      "description": "User study notes"
+    },
     "/feedbacks/{feedbackId}": {
       "schema": "Feedback",
-      "description": "Collection of user feedbacks"
+      "description": "User feedback submissions"
+    },
+    "/organizations/{orgId}": {
+      "schema": "Organization",
+      "description": "Organization profile and settings"
+    },
+    "/organizations/{orgId}/users/{userId}": {
+      "schema": "User",
+      "description": "User profiles within an organization"
+    },
+    "/organizations/{orgId}/conversations/{conversationId}": {
+      "schema": "Conversation",
+      "description": "Organization-scoped conversations"
+    },
+    "/organizations/{orgId}/documents/{docId}": {
+      "schema": "Document",
+      "description": "Organization-scoped documents"
+    },
+    "/organizations/{orgId}/analytics/{analyticsId}": {
+      "schema": "ProductAnalytics",
+      "description": "Organization-scoped feature usage"
+    },
+    "/product_analytics/{id}": {
+      "schema": "ProductAnalytics",
+      "description": "Global feature analytics"
     }
   }
 }

@@ -1,17 +1,18 @@
 import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
-import { 
-  User, Mail, Lock, Brain, Shield, Palette, 
+import {
+  User, Mail, Lock, Brain, Shield, ShieldAlert, Palette,
   Eye, EyeOff, LogOut, Trash2, Check, X, Sparkles, AlertTriangle,
   Database, Key, HardDrive, ShieldCheck, Download, RefreshCw, FileText, LockKeyhole,
-  Camera, Upload, Image as ImageIcon, MessageCircle, Plus, Smartphone, Presentation, Fingerprint, MessageSquare
+  Camera, Upload, Image as ImageIcon, MessageCircle, Plus, Smartphone, Presentation, Fingerprint, MessageSquare, Crown, Monitor, Laptop
 } from "lucide-react";
 import { ThemePalette } from "../utils/theme";
 import { getUserAvatarUrl, saveUserAvatar, removeUserAvatar } from "../utils/avatar";
 import { getWhatsAppContacts, saveWhatsAppContacts, linkWhatsAppContact, WhatsAppContact, syncWhatsAppContacts } from "../utils/whatsapp";
-import PresentationMaker from "./PresentationMaker";
 import { addDoc, collection, query, getDocs } from "firebase/firestore";
-import { db } from "../config/firebase";
+import { db, auth } from "../config/firebase";
+import { getLisaPreferredVoice, setLisaPreferredVoice } from "../utils/voiceUtils";
+import { ComputerDevicesModal } from "./ComputerDevicesModal";
 
 interface ProfileModalProps {
   palette: ThemePalette;
@@ -24,7 +25,7 @@ interface ProfileModalProps {
   onUpdateAvatar?: () => void;
 }
 
-type TabType = "personal" | "memory" | "whatsapp" | "privacy" | "appearance" | "presentation" | "fingerprints" | "feedback" | "logout";
+type TabType = "personal" | "plan" | "memory" | "devices" | "whatsapp" | "privacy" | "safety" | "appearance" | "fingerprints" | "feedback" | "logout";
 
 export default function ProfileModal({
   palette,
@@ -70,6 +71,12 @@ export default function ProfileModal({
   const [lisaMemory, setLisaMemory] = useState("");
   const [memorySuccess, setMemorySuccess] = useState(false);
 
+  // State: Safety & Age Policy
+  const [userAgeTier, setUserAgeTier] = useState<"minor_under_18" | "adult" | "unknown">(() => {
+    return (localStorage.getItem("lisa_user_age_tier") as any) || "adult";
+  });
+  const [safetySuccess, setSafetySuccess] = useState(false);
+
   // State: Feedback
   const [feedback, setFeedback] = useState("");
   const [feedbackSuccess, setFeedbackSuccess] = useState(false);
@@ -86,6 +93,138 @@ export default function ProfileModal({
         fetchFeedback();
     }
   }, [activeTab, currentUser.email]);
+
+  // State: Plan
+  const [lisaPlan, setLisaPlan] = useState<"free" | "paid" | "loading">("loading");
+  const [subDetails, setSubDetails] = useState<{
+    plan: "free" | "paid";
+    subscriptionStatus: string;
+    currentPeriodEnd: number | null;
+    cancelAtPeriodEnd: boolean;
+  } | null>(null);
+  const [subLoading, setSubLoading] = useState(false);
+  const [subActionError, setSubActionError] = useState("");
+  const [redirectingCheckout, setRedirectingCheckout] = useState(false);
+
+  const fetchPlanStatus = async () => {
+    try {
+      const user = auth.currentUser;
+      if (!user) {
+        setLisaPlan("free");
+        setSubDetails(null);
+        return;
+      }
+      const token = await user.getIdToken();
+      const res = await fetch("/api/subscription/status", {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const contentType = res.headers.get("content-type") || "";
+      if (!contentType.includes("application/json")) {
+        setLisaPlan("free");
+        setSubDetails(null);
+        return;
+      }
+      const data = await res.json();
+      const plan = data.plan === "paid" ? "paid" : "free";
+      setLisaPlan(plan);
+      setSubDetails({
+        plan,
+        subscriptionStatus: data.subscriptionStatus || (plan === "paid" ? "active" : "inactive"),
+        currentPeriodEnd: data.currentPeriodEnd || null,
+        cancelAtPeriodEnd: !!data.cancelAtPeriodEnd,
+      });
+    } catch (e) {
+      setLisaPlan("free");
+      setSubDetails(null);
+    }
+  };
+
+  useEffect(() => {
+    fetchPlanStatus();
+  }, []);
+
+  const handleUpgrade = async () => {
+    try {
+      setSubActionError("");
+      setRedirectingCheckout(true);
+      const user = auth.currentUser;
+      if (!user) {
+        setSubActionError("Please sign in first to upgrade to Lisa Pro.");
+        setRedirectingCheckout(false);
+        return;
+      }
+      const token = await user.getIdToken();
+      const res = await fetch("/api/subscription/create-checkout", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      const contentType = res.headers.get("content-type") || "";
+      if (!contentType.includes("application/json")) {
+        const text = await res.text();
+        throw new Error(text.slice(0, 200) || `Server returned HTTP ${res.status}`);
+      }
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to initialize Stripe checkout");
+      }
+
+      if (data.url) {
+        window.location.href = data.url;
+      } else {
+        throw new Error(data.error || "Checkout session URL was not returned by server.");
+      }
+    } catch (err: any) {
+      console.error("Upgrade error:", err);
+      setSubActionError(err?.message || "Failed to start checkout. Please try again.");
+      setRedirectingCheckout(false);
+    }
+  };
+
+  const handleManageSubscription = async () => {
+    try {
+      setSubActionError("");
+      setSubLoading(true);
+      const user = auth.currentUser;
+      if (!user) {
+        setSubLoading(false);
+        return;
+      }
+      const token = await user.getIdToken();
+      const res = await fetch("/api/subscription/create-portal-session", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      const contentType = res.headers.get("content-type") || "";
+      if (!contentType.includes("application/json")) {
+        const text = await res.text();
+        throw new Error(text.slice(0, 200) || `Server returned HTTP ${res.status}`);
+      }
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to open billing portal");
+      }
+
+      if (data.url) {
+        window.location.href = data.url;
+      } else {
+        throw new Error(data.error || "Customer portal URL was not returned.");
+      }
+    } catch (err: any) {
+      console.error("Manage subscription error:", err);
+      setSubActionError(err?.message || "Failed to open billing portal. Please try again.");
+      setSubLoading(false);
+    }
+  };
 
   // State: Privacy Settings
   const [incognitoMode, setIncognitoMode] = useState(false);
@@ -170,7 +309,7 @@ export default function ProfileModal({
     // 4. Load study note preferences
     const ink = localStorage.getItem(`lisa_ink_color_${currentUser.email}`) || "blue";
     const rule = localStorage.getItem(`lisa_notebook_rule_${currentUser.email}`) || "ruled";
-    const voice = localStorage.getItem(`lisa_preferred_voice_${currentUser.email}`) || "Kore";
+    const voice = getLisaPreferredVoice(currentUser);
     setSelectedInk(ink);
     setSelectedRule(rule);
     setPreferredVoice(voice);
@@ -466,7 +605,7 @@ export default function ProfileModal({
             (u: any) => u.email.toLowerCase() !== currentUser.email.toLowerCase()
           );
           localStorage.setItem("lisa_registered_users", JSON.stringify(remainingUsers));
-          
+
           // Cleanup storage
           localStorage.removeItem(`lisa_chat_history_${currentUser.email}`);
           localStorage.removeItem(`lisa_voice_history_${currentUser.email}`);
@@ -484,7 +623,7 @@ export default function ProfileModal({
   const handleSaveAppearance = () => {
     localStorage.setItem(`lisa_ink_color_${currentUser.email}`, selectedInk);
     localStorage.setItem(`lisa_notebook_rule_${currentUser.email}`, selectedRule);
-    localStorage.setItem(`lisa_preferred_voice_${currentUser.email}`, preferredVoice);
+    setLisaPreferredVoice(preferredVoice, currentUser);
     setAppearanceSuccess(true);
     setTimeout(() => setAppearanceSuccess(false), 2000);
   };
@@ -559,6 +698,17 @@ export default function ProfileModal({
 
             <nav className="grid grid-cols-2 gap-1.5 md:flex md:flex-col md:gap-1">
               <button
+                onClick={() => setActiveTab("plan")}
+                className={`flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-xs font-medium transition-all text-left cursor-pointer ${
+                  activeTab === "plan"
+                    ? `bg-white/10 text-white font-semibold ${palette.accentBorder} border-l-2`
+                    : "text-white/60 hover:bg-white/5 hover:text-white"
+                }`}
+              >
+                <Crown size={14} className={activeTab === "plan" ? "text-yellow-400" : "opacity-60"} />
+                <span>Lisa Plan</span>
+              </button>
+              <button
                 onClick={() => setActiveTab("personal")}
                 className={`flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-xs font-medium transition-all text-left cursor-pointer ${
                   activeTab === "personal"
@@ -580,8 +730,23 @@ export default function ProfileModal({
               >
                 <Brain size={14} className={activeTab === "memory" ? palette.accentText : "opacity-60"} />
                 <span className="flex items-center gap-1.5">
-                  Lisa's Memory 
+                  Lisa's Memory
                   <span className="bg-pink-500/20 text-pink-300 text-[8px] px-1.5 py-0.5 rounded-full font-bold uppercase tracking-wider scale-90">Beta</span>
+                </span>
+              </button>
+
+              <button
+                onClick={() => setActiveTab("devices")}
+                className={`flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-xs font-medium transition-all text-left cursor-pointer ${
+                  activeTab === "devices"
+                    ? `bg-white/10 text-white font-semibold border-l-2 border-l-fuchsia-500`
+                    : "text-white/60 hover:bg-white/5 hover:text-white"
+                }`}
+              >
+                <Monitor size={14} className={activeTab === "devices" ? "text-fuchsia-400" : "opacity-60"} />
+                <span className="flex items-center gap-1.5">
+                  Computer Devices
+                  <span className="bg-fuchsia-500/25 text-fuchsia-300 text-[8.5px] px-1.5 py-0.5 rounded-full font-mono uppercase tracking-widest scale-90 font-bold">Bridge</span>
                 </span>
               </button>
 
@@ -613,6 +778,21 @@ export default function ProfileModal({
               </button>
 
               <button
+                onClick={() => setActiveTab("safety")}
+                className={`flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-xs font-medium transition-all text-left cursor-pointer ${
+                  activeTab === "safety"
+                    ? `bg-white/10 text-white font-semibold ${palette.accentBorder} border-l-2`
+                    : "text-white/60 hover:bg-white/5 hover:text-white"
+                }`}
+              >
+                <ShieldAlert size={14} className={activeTab === "safety" ? palette.accentText : "opacity-60"} />
+                <span className="flex items-center gap-1.5">
+                  Safety & Age Policy
+                  <span className="bg-cyan-500/25 text-cyan-300 text-[8.5px] px-1.5 py-0.5 rounded-full font-mono uppercase tracking-widest scale-90 font-bold">Active</span>
+                </span>
+              </button>
+
+              <button
                 onClick={() => setActiveTab("appearance")}
                 className={`flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-xs font-medium transition-all text-left cursor-pointer ${
                   activeTab === "appearance"
@@ -622,18 +802,6 @@ export default function ProfileModal({
               >
                 <Palette size={14} className={activeTab === "appearance" ? palette.accentText : "opacity-60"} />
                 <span>Appearance / Modes</span>
-              </button>
-
-              <button
-                onClick={() => setActiveTab("presentation")}
-                className={`flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-xs font-medium transition-all text-left cursor-pointer ${
-                  activeTab === "presentation"
-                    ? `bg-white/10 text-white font-semibold ${palette.accentBorder} border-l-2`
-                    : "text-white/60 hover:bg-white/5 hover:text-white"
-                }`}
-              >
-                <Presentation size={14} className={activeTab === "presentation" ? palette.accentText : "opacity-60"} />
-                <span>Presentation Maker</span>
               </button>
 
               <button
@@ -661,8 +829,8 @@ export default function ProfileModal({
               </button>
 
               {/* Mobile Only Logout Button (Grid me seamlessly fit ho jayega) */}
-              <button 
-                onClick={onLogout} 
+              <button
+                onClick={onLogout}
                 className="col-span-2 md:hidden flex items-center justify-center gap-2 px-3 py-2.5 mt-2 text-xs font-semibold text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl active:bg-red-500/20 transition-all cursor-pointer"
               >
                 <LogOut size={14} />
@@ -673,8 +841,8 @@ export default function ProfileModal({
 
           {/* Laptop Only Logout Button (Niche layout me float karega) */}
           <div className="hidden md:block pt-4 border-t border-white/10 mt-4">
-            <button 
-              onClick={onLogout} 
+            <button
+              onClick={onLogout}
               className="w-full flex items-center gap-2 px-3 py-2 text-xs font-medium text-red-400 hover:bg-red-500/10 rounded-xl transition-colors cursor-pointer"
             >
               <LogOut size={14} />
@@ -687,6 +855,119 @@ export default function ProfileModal({
        <div className="flex-1 p-5 md:p-8 flex flex-col justify-between overflow-y-auto max-h-[calc(100vh-160px)] md:max-h-[500px]">
           <AnimatePresence mode="wait">
             {/* 1. PERSONAL DETAILS TAB */}
+            {activeTab === "plan" && (
+              <motion.div
+                key="plan-details"
+                initial={{ opacity: 0, x: 10 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -10 }}
+                className="space-y-6"
+              >
+                <div className="space-y-1">
+                  <h3 className="text-lg font-serif font-bold text-white flex items-center gap-2">
+                    <Crown size={18} className="text-yellow-400" />
+                    Lisa AI Plan
+                  </h3>
+                  <p className="text-xs text-white/50 font-medium">Manage your subscription and AI provider.</p>
+                </div>
+
+                {lisaPlan === "loading" ? (
+                  <div className="p-6 bg-white/5 border border-white/10 rounded-2xl flex justify-center items-center">
+                    <RefreshCw size={24} className="text-white/50 animate-spin" />
+                  </div>
+                ) : lisaPlan === "free" ? (
+                  <div className="p-6 bg-white/5 border border-white/10 rounded-2xl space-y-4">
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <h4 className="text-xl font-bold text-white">Lisa Free</h4>
+                        <p className="text-xs text-[#10b981] font-medium mt-1">Powered by Gemini</p>
+                      </div>
+                      <div className="px-2 py-1 rounded bg-white/10 text-white/70 text-[10px] font-bold uppercase tracking-wider">Current</div>
+                    </div>
+                    <p className="text-sm text-white/70 leading-relaxed">
+                      Gemini powers Lisa's AI conversations. Enjoy natural text chats and Lisa's responsive voice capabilities.
+                    </p>
+
+                    {subActionError && (
+                      <p className="text-xs text-rose-400 bg-rose-500/10 px-3 py-2 rounded-xl border border-rose-500/20 font-mono">
+                        ⚠️ {subActionError}
+                      </p>
+                    )}
+
+                    <button
+                      onClick={handleUpgrade}
+                      disabled={redirectingCheckout}
+                      className="w-full mt-4 py-3 rounded-xl bg-gradient-to-r from-violet-500 to-fuchsia-500 text-white font-bold text-sm hover:opacity-90 transition-opacity flex items-center justify-center gap-2 shadow-lg shadow-violet-500/20 disabled:opacity-50 cursor-pointer"
+                    >
+                      {redirectingCheckout ? (
+                        <>
+                          <RefreshCw size={16} className="animate-spin" />
+                          <span>Redirecting to secure Stripe checkout...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Crown size={16} />
+                          <span>Upgrade to Lisa Pro 💎</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+                ) : (
+                  <div className="p-6 bg-gradient-to-br from-violet-500/10 to-fuchsia-500/10 border border-violet-500/30 rounded-2xl space-y-4">
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <h4 className="text-xl font-bold text-white flex items-center gap-2">
+                          Lisa Pro <Check size={18} className="text-[#10b981]" />
+                        </h4>
+                        <p className="text-xs text-fuchsia-400 font-medium mt-1">DeepSeek AI + Gemini Lisa Voice</p>
+                      </div>
+                      <div className="px-2 py-1 rounded bg-violet-500/20 text-violet-300 text-[10px] font-bold uppercase tracking-wider border border-violet-500/30">
+                        {subDetails?.subscriptionStatus === "past_due" ? "Past Due" : "Active"}
+                      </div>
+                    </div>
+                    <p className="text-sm text-white/80 leading-relaxed">
+                      DeepSeek powers Lisa's advanced text reasoning, while Lisa's human-like Gemini voice remains unchanged. You have access to our highest-intelligence reasoning models.
+                    </p>
+
+                    {subDetails?.currentPeriodEnd && (
+                      <div className="text-xs text-white/60 bg-white/5 px-3 py-2 rounded-xl flex items-center justify-between border border-white/5">
+                        <span>{subDetails.cancelAtPeriodEnd ? "Access ends on" : "Next renewal"}</span>
+                        <span className="font-mono text-white/90">
+                          {new Date(subDetails.currentPeriodEnd * 1000).toLocaleDateString(undefined, {
+                            year: "numeric",
+                            month: "short",
+                            day: "numeric",
+                          })}
+                        </span>
+                      </div>
+                    )}
+
+                    {subActionError && (
+                      <p className="text-xs text-rose-400 bg-rose-500/10 px-3 py-2 rounded-xl border border-rose-500/20 font-mono">
+                        ⚠️ {subActionError}
+                      </p>
+                    )}
+
+                    <button
+                      onClick={handleManageSubscription}
+                      disabled={subLoading}
+                      className="w-full mt-4 py-3 rounded-xl bg-white/10 hover:bg-white/15 text-white font-medium text-sm transition-colors flex items-center justify-center gap-2 border border-white/10 disabled:opacity-50 cursor-pointer"
+                    >
+                      {subLoading ? (
+                        <>
+                          <RefreshCw size={16} className="animate-spin" />
+                          <span>Opening billing portal...</span>
+                        </>
+                      ) : (
+                        <>
+                          <span>Manage Subscription</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+                )}
+              </motion.div>
+            )}
             {activeTab === "personal" && (
               <motion.div
                 key="personal-details"
@@ -756,7 +1037,7 @@ export default function ProfileModal({
                       <p className="text-[10px] text-white/40 leading-relaxed max-w-[320px]">
                         Apna khud ka photo upload karein ya directly email connected Gravatar fetch hone dein!
                       </p>
-                      
+
                       <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2 pt-1">
                         <label className="px-2.5 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-[9px] font-mono uppercase tracking-wider text-white flex items-center gap-1 cursor-pointer transition-all">
                           <Upload size={10} />
@@ -768,7 +1049,7 @@ export default function ProfileModal({
                             className="hidden"
                           />
                         </label>
-                        
+
                         <button
                           type="button"
                           onClick={handleAvatarRemove}
@@ -900,7 +1181,7 @@ export default function ProfileModal({
                   <div className="flex flex-col gap-1.5">
                     <label className="text-[10px] font-mono tracking-widest text-emerald-300 font-semibold uppercase">Quick Add New Memory</label>
                     <div className="flex gap-2">
-                       <input 
+                       <input
                          type="text"
                          id="quickMemoryInput"
                          className="flex-1 bg-white/[0.03] border border-white/10 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-emerald-500 transition-all"
@@ -973,6 +1254,19 @@ export default function ProfileModal({
               </motion.div>
             )}
 
+            {/* COMPUTER DEVICES BRIDGE TAB */}
+            {activeTab === "devices" && (
+              <motion.div
+                key="devices-tab"
+                initial={{ opacity: 0, x: 10 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -10 }}
+                className="space-y-4"
+              >
+                <ComputerDevicesModal />
+              </motion.div>
+            )}
+
             {/* WHATSAPP CONTACTS INTEGRATION TAB */}
             {activeTab === "whatsapp" && (
               <motion.div
@@ -1016,7 +1310,7 @@ export default function ProfileModal({
                 )}
 
                 {/* ADD / EDIT FORM */}
-                <form 
+                <form
                   onSubmit={(e) => {
                     e.preventDefault();
                     setWaError("");
@@ -1025,7 +1319,7 @@ export default function ProfileModal({
                       setWaError("Oho! Contact ka naam toh dalo.");
                       return;
                     }
-                    
+
                     // Link the contact
                     const updated = linkWhatsAppContact(currentUser.email, newWaName, newWaPhone);
                     setWaContacts(updated);
@@ -1042,7 +1336,7 @@ export default function ProfileModal({
                   <div className="flex flex-col sm:flex-row gap-3">
                     <div className="flex-1 space-y-1">
                       <label className="text-[9px] font-mono text-white/40 uppercase">Name (e.g. Brother)</label>
-                      <input 
+                      <input
                         type="text"
                         value={newWaName}
                         onChange={(e) => setNewWaName(e.target.value)}
@@ -1052,7 +1346,7 @@ export default function ProfileModal({
                     </div>
                     <div className="flex-1 space-y-1">
                       <label className="text-[9px] font-mono text-white/40 uppercase">WhatsApp Number (with country code)</label>
-                      <input 
+                      <input
                         type="text"
                         value={newWaPhone}
                         onChange={(e) => setNewWaPhone(e.target.value)}
@@ -1061,7 +1355,7 @@ export default function ProfileModal({
                       />
                     </div>
                     <div className="flex items-end shrink-0">
-                      <button 
+                      <button
                         type="submit"
                         className="w-full sm:w-auto py-2 px-4 bg-[#10b981] hover:bg-[#10b981]/90 text-black font-semibold text-xs rounded-xl transition-all cursor-pointer flex items-center justify-center gap-1.5 h-[34px] uppercase tracking-wider font-mono"
                       >
@@ -1077,16 +1371,22 @@ export default function ProfileModal({
                   <h4 className="text-[10px] font-mono tracking-widest text-white/50 uppercase font-bold text-left">
                     Registered Shortcuts ({waContacts.length})
                   </h4>
-                  
+
                   <div className="max-h-[160px] overflow-y-auto pr-1 space-y-2">
                     {waContacts.length === 0 ? (
-                      <p className="text-[11px] text-zinc-500 text-center py-4 font-mono italic">
-                        Koi contact links nahi hain. Add karein!
-                      </p>
+                      <div className="flex flex-col items-center justify-center py-8 text-center space-y-2 opacity-40">
+                        <Smartphone size={32} className="text-zinc-500 mb-2" />
+                        <p className="text-[11px] font-mono uppercase tracking-widest font-bold">
+                          NO WHATSAPP SHORTCUTS
+                        </p>
+                        <p className="text-[10px] italic leading-relaxed max-w-[200px]">
+                          Add a contact above to create a personalized Lisa shortcut.
+                        </p>
+                      </div>
                     ) : (
                       waContacts.map((contact) => (
-                        <div 
-                          key={contact.id} 
+                        <div
+                          key={contact.id}
                           className="flex items-center justify-between p-3 bg-white/[0.01] border border-white/5 rounded-xl hover:bg-white/[0.02] transition-colors"
                         >
                           <div className="flex items-center gap-2.5">
@@ -1171,7 +1471,7 @@ export default function ProfileModal({
                   {/* --- CORE DATA RETENTION & SECURITY --- */}
                   <div className="space-y-2">
                     <h4 className="text-[10px] font-mono tracking-widest text-emerald-400/90 uppercase font-semibold">1. Session Access & Retention Controls</h4>
-                    
+
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       {/* Incognito mode toggle */}
                       <div className="flex flex-col justify-between p-3.5 bg-white/[0.02] border border-white/5 hover:border-white/10 rounded-2xl transition-all">
@@ -1350,7 +1650,7 @@ export default function ProfileModal({
                   {/* --- COMPLIANCE PHYSICAL GATEWAYS --- */}
                   <div className="space-y-2 border-t border-white/5 pt-3">
                     <h4 className="text-[10px] font-mono tracking-widest text-[#10b981] uppercase font-semibold">3. Security Keys & Hardware Permissions</h4>
-                    
+
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 font-mono text-[10px]">
                       {/* Audio perm status */}
                       <div className="p-3 bg-white/[0.02] border border-white/5 rounded-2xl flex items-center justify-between">
@@ -1416,6 +1716,95 @@ export default function ProfileModal({
               </motion.div>
             )}
 
+            {/* SAFETY & AGE POLICY TAB */}
+            {activeTab === "safety" && (
+              <motion.div
+                key="safety-details"
+                initial={{ opacity: 0, x: 10 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -10 }}
+                className="space-y-4"
+              >
+                <div className="space-y-1">
+                  <h3 className="text-lg font-serif font-bold text-white flex items-center gap-2">
+                    <ShieldAlert size={18} className="text-cyan-400" />
+                    <span>Safety & Age-Aware Content System</span>
+                  </h3>
+                  <p className="text-xs text-white/50 leading-relaxed font-sans">
+                    Configure age-appropriate content filters, safety guardrails, medical boundaries, and professional role restrictions.
+                  </p>
+                </div>
+
+                {safetySuccess && (
+                  <div className="text-xs text-cyan-400 bg-cyan-500/10 px-3.5 py-2.5 rounded-xl border border-cyan-500/25 font-mono flex items-center gap-2">
+                    <ShieldCheck size={14} className="text-cyan-400" />
+                    <span>Safety and age tier configuration updated successfully.</span>
+                  </div>
+                )}
+
+                <div className="space-y-4 max-h-[360px] overflow-y-auto pr-1">
+                  {/* Age Tier Selector */}
+                  <div className="p-4 bg-white/[0.02] border border-white/5 rounded-2xl space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <div className="text-xs font-semibold text-white">User Age Classification Tier</div>
+                        <p className="text-[10px] text-white/40 mt-0.5">
+                          Controls whether age-appropriate minor guardrails or adult educational filters are applied.
+                        </p>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2 pt-1">
+                      <button
+                        onClick={() => {
+                          setUserAgeTier("minor_under_18");
+                          localStorage.setItem("lisa_user_age_tier", "minor_under_18");
+                          setSafetySuccess(true);
+                          setTimeout(() => setSafetySuccess(false), 2500);
+                        }}
+                        className={`p-3 rounded-xl border text-left transition-all cursor-pointer flex flex-col gap-1 ${
+                          userAgeTier === "minor_under_18"
+                            ? "bg-cyan-500/15 border-cyan-500/50 text-cyan-200"
+                            : "bg-black/20 border-white/10 text-white/60 hover:border-white/20"
+                        }`}
+                      >
+                        <span className="text-xs font-bold">Minor (Under 18)</span>
+                        <span className="text-[9px] opacity-70">Strict filters on explicit sexual content; educational biology allowed.</span>
+                      </button>
+
+                      <button
+                        onClick={() => {
+                          setUserAgeTier("adult");
+                          localStorage.setItem("lisa_user_age_tier", "adult");
+                          setSafetySuccess(true);
+                          setTimeout(() => setSafetySuccess(false), 2500);
+                        }}
+                        className={`p-3 rounded-xl border text-left transition-all cursor-pointer flex flex-col gap-1 ${
+                          userAgeTier === "adult"
+                            ? "bg-cyan-500/15 border-cyan-500/50 text-cyan-200"
+                            : "bg-black/20 border-white/10 text-white/60 hover:border-white/20"
+                        }`}
+                      >
+                        <span className="text-xs font-bold">Adult (18+)</span>
+                        <span className="text-[9px] opacity-70">Appropriate educational and health info subject to standard platform safety.</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Safety Policy Pillars */}
+                  <div className="p-4 bg-white/[0.02] border border-white/5 rounded-2xl space-y-3 text-xs">
+                    <h4 className="text-[10px] font-mono tracking-widest text-cyan-400 uppercase font-semibold">Active Safety Guardrails & Hierarchy</h4>
+                    <ul className="space-y-2 text-white/70 text-[11px] list-disc pl-4">
+                      <li><strong className="text-white">Safety Priority Hierarchy:</strong> Platform Safety → Age Safety → Domain Safety → Organization Policy → Persona → User Request. A persona can never override safety.</li>
+                      <li><strong className="text-white">Self-Harm & Crisis Protection:</strong> Immediate supportive intervention and referral resources (e.g. 988 lifeline) when self-harm intent is detected.</li>
+                      <li><strong className="text-white">Medical Safety:</strong> Lisa can explain medical reports or general health concepts, but never diagnoses, prescribes, or claims a medical license.</li>
+                      <li><strong className="text-white">Professional Role Ethics:</strong> Police or Teacher personas never claim real legal or institutional authority.</li>
+                      <li><strong className="text-white">Privacy-Preserving Auditing:</strong> Safety logging uses aggregated event categories without exposing private user content.</li>
+                    </ul>
+                  </div>
+                </div>
+              </motion.div>
+            )}
+
             {/* 4. APPEARANCE & MODES */}
             {activeTab === "appearance" && (
               <motion.div
@@ -1448,8 +1837,8 @@ export default function ProfileModal({
                       <button
                         onClick={() => handleDarkModeToggle(false)}
                         className={`px-3 py-1.5 rounded-lg text-[10px] font-mono uppercase tracking-widest font-bold transition-all cursor-pointer ${
-                          !isDarkMode 
-                            ? "bg-white text-black font-semibold shadow-md" 
+                          !isDarkMode
+                            ? "bg-white text-black font-semibold shadow-md"
                             : "text-white/40 hover:text-white"
                         }`}
                       >
@@ -1458,8 +1847,8 @@ export default function ProfileModal({
                       <button
                         onClick={() => handleDarkModeToggle(true)}
                         className={`px-3 py-1.5 rounded-lg text-[10px] font-mono uppercase tracking-widest font-bold transition-all cursor-pointer ${
-                          isDarkMode 
-                            ? "bg-white text-black font-semibold shadow-md" 
+                          isDarkMode
+                            ? "bg-white text-black font-semibold shadow-md"
                             : "text-white/40 hover:text-white"
                         }`}
                       >
@@ -1544,19 +1933,6 @@ export default function ProfileModal({
               </motion.div>
             )}
 
-            {/* 6. PRESENTATION MAKER TAB */}
-            {activeTab === "presentation" && (
-              <motion.div
-                key="presentation-tab"
-                initial={{ opacity: 0, x: 10 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: -10 }}
-                className="space-y-4"
-              >
-                <PresentationMaker />
-              </motion.div>
-            )}
-
             {/* 7. FINGERPRINTS MANAGEMENT TAB */}
             {activeTab === "fingerprints" && (
               <motion.div
@@ -1593,8 +1969,8 @@ export default function ProfileModal({
                   ))}
                 </div>
                 <div className="flex gap-2">
-                  <input 
-                    type="text" 
+                  <input
+                    type="text"
                     placeholder="New fingerprint name"
                     className="flex-1 bg-white/[0.03] border border-white/10 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-emerald-500"
                     onKeyDown={(e) => {
@@ -1609,7 +1985,7 @@ export default function ProfileModal({
                       }
                     }}
                   />
-                  <button 
+                  <button
                     onClick={() => {
                       const input = document.querySelector('input[placeholder="New fingerprint name"]') as HTMLInputElement;
                       const val = input.value.trim();
@@ -1646,22 +2022,22 @@ export default function ProfileModal({
                     Your feedback is invaluable. Let us know how we can improve.
                   </p>
                 </div>
-                
+
                 <div className="space-y-3">
-                  <textarea 
+                  <textarea
                     value={feedback}
                     onChange={(e) => setFeedback(e.target.value)}
                     placeholder="Enter your feedback here..."
                     className="w-full bg-white/[0.03] border border-white/10 rounded-xl px-4 py-3 text-xs text-white outline-none focus:border-emerald-500 min-h-[120px]"
                   />
-                  <button 
+                  <button
                     onClick={handleSaveFeedback}
                     className="w-full py-2 bg-emerald-600/20 text-emerald-300 rounded-xl text-xs font-bold hover:bg-emerald-600/30"
                   >
                     {feedbackSuccess ? "Feedback Sent!" : "Submit Feedback"}
                   </button>
                 </div>
-                
+
                 {currentUser.email === "anilraut897@gmail.com" && (
                   <div className="pt-4 border-t border-white/10 space-y-2">
                     <h4 className="text-sm font-bold text-white mb-2">Admin View: Feedback</h4>

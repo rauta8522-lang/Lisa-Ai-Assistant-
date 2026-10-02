@@ -1,8 +1,9 @@
 import React, { useState } from "react";
 import { motion } from "motion/react";
-import { signInWithPopup } from "firebase/auth";
+import { signInWithPopup, signInWithEmailAndPassword, createUserWithEmailAndPassword, updateProfile } from "firebase/auth";
 import { Eye, EyeOff, Mail, Lock, User, Loader2 } from "lucide-react";
 import { auth, googleProvider } from "../config/firebase";
+import { analytics } from "../services/analyticsService";
 
 const logo = "/pwa-512x512.png";
 
@@ -24,7 +25,6 @@ export default function LoginScreen({ onLoginSuccess, onLisaSpeak }: LoginScreen
 
   const handleLogin = async () => {
     setError("");
-
     const emailVal = email.trim();
     const passVal = password.trim();
 
@@ -34,41 +34,26 @@ export default function LoginScreen({ onLoginSuccess, onLisaSpeak }: LoginScreen
     }
 
     setLoading(true);
-    setTimeout(() => {
-      const list = localStorage.getItem("lisa_registered_users");
-      let users = [];
-      if (list) {
-        try {
-          users = JSON.parse(list);
-        } catch (e) {
-          users = [];
-        }
-      }
-
-      const user = users.find(
-        (u: any) => u.email.toLowerCase() === emailVal.toLowerCase()
-      );
-
-      if (!user) {
-        setError("Uff! Aisa koi user milahi nahi. Register kiya kya?");
-        setLoading(false);
-        return;
-      }
-
-      if (user.passwordHash !== passVal) {
-        setError("Oho! Galat password. Kahin bhool toh nahi gaye?");
-        setLoading(false);
-        return;
-      }
-
+    try {
+      const userCredential = await signInWithEmailAndPassword(auth, emailVal, passVal);
+      const user = userCredential.user;
+      analytics.track("login", { method: "email", uid: user.uid });
       setLoading(false);
       onLoginSuccess({uid: user.uid, email: user.email!, name: user.displayName || "User"});
-    }, 700);
+    } catch (err: any) {
+      setLoading(false);
+      if (err.code === 'auth/user-not-found') {
+        setError("Uff! Aisa koi user milahi nahi. Register kiya kya?");
+      } else if (err.code === 'auth/wrong-password') {
+        setError("Oho! Galat password. Kahin bhool toh nahi gaye?");
+      } else {
+        setError(err.message || "Login failed.");
+      }
+    }
   };
 
   const handleSignup = async () => {
     setError("");
-
     const nameVal = username.trim();
     const emailVal = signupEmail.trim();
     const passVal = signupPassword;
@@ -89,8 +74,8 @@ export default function LoginScreen({ onLoginSuccess, onLisaSpeak }: LoginScreen
       return;
     }
 
-    if (passVal.length < 4) {
-      setError("Uff, secret code thoda lamba dalo! (At least 4 keys)");
+    if (passVal.length < 6) {
+      setError("Uff, secret code thoda lamba dalo! (At least 6 keys)");
       return;
     }
 
@@ -100,39 +85,22 @@ export default function LoginScreen({ onLoginSuccess, onLisaSpeak }: LoginScreen
     }
 
     setLoading(true);
-    setTimeout(() => {
-      const list = localStorage.getItem("lisa_registered_users") || "[]";
-      let users = [];
-      try {
-        users = JSON.parse(list);
-      } catch (e) {
-        users = [];
-      }
-
-      const alreadyExists = users.some(
-        (u: any) => u.email.toLowerCase() === emailVal.toLowerCase()
-      );
-
-      if (alreadyExists) {
-        setError("Arey! Yeh email toh already registered hai. Log in karo!");
-        setLoading(false);
-        return;
-      }
-
-  const newUser = {
-  uid: crypto.randomUUID(), // ya Date.now().toString()
-  email: emailVal.toLowerCase(),
-  name: nameVal,
-  passwordHash: passVal,
-};
-
-      const updatedList = [...users, newUser];
-      localStorage.setItem("lisa_registered_users", JSON.stringify(updatedList));
-
+    try {
+      const userCredential = await createUserWithEmailAndPassword(auth, emailVal, passVal);
+      const user = userCredential.user;
+      await updateProfile(user, { displayName: nameVal });
+      analytics.track("user_registered", { method: "email", uid: user.uid });
       setLoading(false);
       onLisaSpeak(`Wah kshama, naya account toh ban gaya. Chalo ab fatfat login karo aur shubharambh kijiye!`);
-      onLoginSuccess({uid: newUser.uid, email: newUser.email, name: newUser.name,});
-    }, 700);
+      onLoginSuccess({uid: user.uid, email: user.email!, name: nameVal});
+    } catch (err: any) {
+      setLoading(false);
+      if (err.code === 'auth/email-already-in-use') {
+        setError("Arre! Yeh email toh pehle se registered hai.");
+      } else {
+        setError(err.message || "Signup failed.");
+      }
+    }
   };
 
   const handleGoogleLogin = async () => {
@@ -163,8 +131,10 @@ export default function LoginScreen({ onLoginSuccess, onLisaSpeak }: LoginScreen
           passwordHash: "",
         });
         localStorage.setItem("lisa_registered_users", JSON.stringify(users));
+        analytics.track("user_registered", { method: "google", uid: user.uid });
       }
 
+      analytics.track("login", { method: "google", uid: user.uid });
       onLoginSuccess({uid: user.uid,email: emailVal,name: nameVal});
     } catch (err: any) {
       setError(err?.message || "Google sign in failed. Try again.");
